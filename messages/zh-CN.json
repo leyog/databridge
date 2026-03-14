@@ -1,0 +1,121 @@
+{
+  "nav": {
+    "features": "功能",
+    "pricing": "定价",
+    "login": "登录",
+    "getStarted": "免费开始",
+    "dashboard": "工作台",
+    "templates": "模板",
+    "jobs": "任务",
+    "settings": "设置",
+    "logout": "退出登录"
+  },
+  "hero": {
+    "badge": "AI 驱动的数据录入",
+    "title": "将任意文件转换为结构化数据",
+    "subtitle": "上传 Excel、PDF、图片或邮件，AI 自动提取并结构化数据，经人工审核后自动回写到业务系统。",
+    "cta": "免费开始",
+    "ctaSub": "无需信用卡",
+    "demo": "观看演示"
+  },
+  "features": {
+    "title": "自动化数据录入所需的一切",
+    "subtitle": "从文件上传到系统集成，DataBridge 处理整个工作流程。",
+    "items": {
+      "ai": { "title": "AI 智能提取", "desc": "支持 Excel、PDF、图片、邮件等多种格式，AI 理解上下文，准确提取结构化数据。" },
+      "review": { "title": "人工审核环节", "desc": "每次提取都经过您的审核才会发送到系统，一键编辑、批准或拒绝。" },
+      "webhook": { "title": "自动系统集成", "desc": "一次定义 API 端点，审核通过的数据自动发送到您的 CRM、ERP 或任何业务系统。" },
+      "template": { "title": "可复用模板", "desc": "创建带有自定义提示词和输出 Schema 的模板，在团队中复用，保证结果一致性。" },
+      "i18n": { "title": "多语言支持", "desc": "完整支持中文、英文和日文，团队成员使用各自偏好的语言工作。" },
+      "secure": { "title": "企业级安全", "desc": "符合 SOC 2 标准，数据传输和存储全程加密，我们绝不用您的数据训练模型。" }
+    }
+  },
+  "pricing": {
+    "title": "简单透明的定价",
+    "subtitle": "免费开始，按需升级。",
+    "monthly": "按月计费",
+    "perUserMonth": "/用户/月",
+    "free": {
+      "name": "免费版",
+      "price": "0",
+      "desc": "适合个人入门使用",
+      "cta": "免费开始",
+      "features": ["每月 50 个任务", "2 个模板", "邮件支持", "1 个用户"]
+    },
+    "pro": {
+      "name": "专业版",
+      "price": "20",
+      "desc": "适合成长中的团队",
+      "cta": "开始 14 天免费试用",
+      "badge": "最受欢迎",
+      "features": ["无限任务", "无限模板", "Webhook 集成", "优先支持", "14 天免费试用", "多用户"]
+    },
+    "enterprise": {
+      "name": "企业版",
+      "price": "25",
+      "desc": "适合大型组织",
+      "cta": "联系销售",
+      "features": ["专业版全部功能", "SSO / SAML", "自定义 AI 模型", "SLA 保障", "专属支持", "自定义合同"]
+    }
+  },
+  "auth": {
+    "loginTitle": "欢迎回来",
+    "loginSubtitle": "登录您的账号",
+    "registerTitle": "创建账号",
+    "registerSubtitle": "立即开始免费使用",
+    "continueWithGoogle": "使用 Google 账号继续",
+    "orContinueWith": "或使用以下方式",
+    "email": "邮箱",
+    "password": "密码",
+    "name": "姓名",
+    "signIn": "登录",
+    "signUp": "注册",
+    "noAccount": "还没有账号？",
+    "hasAccount": "已有账号？",
+    "forgotPassword": "忘记密码？"
+  },
+  "app": {
+    "jobs": {
+      "title": "任务列表",
+      "new": "新建任务",
+      "empty": "暂无任务，上传文件开始解析。",
+      "status": {
+        "PENDING": "待处理",
+        "PROCESSING": "处理中",
+        "PARSED": "已解析",
+        "REVIEWING": "审核中",
+        "APPROVED": "已批准",
+        "REJECTED": "已拒绝",
+        "SENT": "已发送",
+        "FAILED": "失败"
+      }
+    },
+    "templates": {
+      "title": "模板管理",
+      "new": "新建模板",
+      "empty": "暂无模板，创建一个开始解析文件。",
+      "name": "模板名称",
+      "description": "描述",
+      "prompt": "AI 提示词",
+      "promptHint": "描述需要提取哪些数据以及如何结构化。",
+      "outputSchema": "输出 Schema（JSON）",
+      "webhookUrl": "Webhook URL",
+      "webhookHeaders": "Webhook 请求头（JSON）"
+    },
+    "review": {
+      "title": "审核提取结果",
+      "original": "原始文件",
+      "extracted": "提取数据",
+      "approve": "批准并发送",
+      "reject": "拒绝",
+      "save": "保存修改",
+      "note": "审核备注"
+    }
+  },
+  "errors": {
+    "generic": "出现错误，请重试。",
+    "unauthorized": "您没有权限执行此操作。",
+    "notFound": "未找到请求的资源。",
+    "planLimit": "已达到套餐限制，请升级以继续使用。"
+  }
+}

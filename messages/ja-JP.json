@@ -1,0 +1,121 @@
+{
+  "nav": {
+    "features": "機能",
+    "pricing": "料金",
+    "login": "ログイン",
+    "getStarted": "無料で始める",
+    "dashboard": "ダッシュボード",
+    "templates": "テンプレート",
+    "jobs": "ジョブ",
+    "settings": "設定",
+    "logout": "ログアウト"
+  },
+  "hero": {
+    "badge": "AI駆動のデータ入力",
+    "title": "あらゆるファイルを構造化データに変換",
+    "subtitle": "Excel、PDF、画像、メールをアップロードするだけ。AIがデータを抽出・構造化し、承認後に業務システムへ自動連携します。",
+    "cta": "無料で始める",
+    "ctaSub": "クレジットカード不要",
+    "demo": "デモを見る"
+  },
+  "features": {
+    "title": "データ入力自動化に必要なすべて",
+    "subtitle": "ファイルのアップロードからシステム連携まで、DataBridgeがワークフロー全体を処理します。",
+    "items": {
+      "ai": { "title": "AI自動抽出", "desc": "Excel、PDF、画像、メールなど多様な形式に対応。AIがコンテキストを理解し、正確に構造化データを抽出します。" },
+      "review": { "title": "人間によるレビュー", "desc": "すべての抽出結果はシステムへ送信前にレビューが必要です。ワンクリックで編集・承認・却下できます。" },
+      "webhook": { "title": "自動システム連携", "desc": "APIエンドポイントを一度設定するだけ。承認済みデータがCRM、ERP、その他業務システムへ自動送信されます。" },
+      "template": { "title": "再利用可能なテンプレート", "desc": "カスタムプロンプトと出力スキーマでテンプレートを作成。チーム全体で再利用し、一貫した結果を実現します。" },
+      "i18n": { "title": "多言語対応", "desc": "英語、中国語、日本語を完全サポート。チームメンバーが好みの言語で作業できます。" },
+      "secure": { "title": "エンタープライズセキュリティ", "desc": "SOC 2準拠。データは転送中・保存中ともに暗号化。お客様のデータでモデルをトレーニングすることはありません。" }
+    }
+  },
+  "pricing": {
+    "title": "シンプルで透明な料金体系",
+    "subtitle": "無料で始めて、必要に応じてアップグレード。",
+    "monthly": "月額",
+    "perUserMonth": "/ユーザー/月",
+    "free": {
+      "name": "フリー",
+      "price": "0",
+      "desc": "個人利用に最適",
+      "cta": "無料で始める",
+      "features": ["月50ジョブ", "テンプレート2件", "メールサポート", "1ユーザー"]
+    },
+    "pro": {
+      "name": "プロフェッショナル",
+      "price": "20",
+      "desc": "成長するチームに",
+      "cta": "14日間無料トライアル",
+      "badge": "人気No.1",
+      "features": ["無制限ジョブ", "無制限テンプレート", "Webhook連携", "優先サポート", "14日間無料トライアル", "複数ユーザー"]
+    },
+    "enterprise": {
+      "name": "エンタープライズ",
+      "price": "25",
+      "desc": "大規模組織向け",
+      "cta": "営業に問い合わせ",
+      "features": ["プロの全機能", "SSO / SAML", "カスタムAIモデル", "SLA保証", "専任サポート", "カスタム契約"]
+    }
+  },
+  "auth": {
+    "loginTitle": "おかえりなさい",
+    "loginSubtitle": "アカウントにサインイン",
+    "registerTitle": "アカウント作成",
+    "registerSubtitle": "今すぐ無料で始めましょう",
+    "continueWithGoogle": "Googleで続ける",
+    "orContinueWith": "または",
+    "email": "メールアドレス",
+    "password": "パスワード",
+    "name": "氏名",
+    "signIn": "サインイン",
+    "signUp": "登録",
+    "noAccount": "アカウントをお持ちでない方は",
+    "hasAccount": "すでにアカウントをお持ちの方は",
+    "forgotPassword": "パスワードをお忘れですか？"
+  },
+  "app": {
+    "jobs": {
+      "title": "ジョブ一覧",
+      "new": "新規ジョブ",
+      "empty": "ジョブがありません。ファイルをアップロードして開始してください。",
+      "status": {
+        "PENDING": "待機中",
+        "PROCESSING": "処理中",
+        "PARSED": "解析済み",
+        "REVIEWING": "レビュー中",
+        "APPROVED": "承認済み",
+        "REJECTED": "却下",
+        "SENT": "送信済み",
+        "FAILED": "失敗"
+      }
+    },
+    "templates": {
+      "title": "テンプレート管理",
+      "new": "新規テンプレート",
+      "empty": "テンプレートがありません。作成してファイルの解析を始めましょう。",
+      "name": "テンプレート名",
+      "description": "説明",
+      "prompt": "AIプロンプト",
+      "promptHint": "抽出するデータと構造化方法を説明してください。",
+      "outputSchema": "出力スキーマ（JSON）",
+      "webhookUrl": "Webhook URL",
+      "webhookHeaders": "Webhookヘッダー（JSON）"
+    },
+    "review": {
+      "title": "抽出結果のレビュー",
+      "original": "元ファイル",
+      "extracted": "抽出データ",
+      "approve": "承認して送信",
+      "reject": "却下",
+      "save": "変更を保存",
+      "note": "レビューメモ"
+    }
+  },
+  "errors": {
+    "generic": "エラーが発生しました。もう一度お試しください。",
+    "unauthorized": "この操作を実行する権限がありません。",
+    "notFound": "リクエストされたリソースが見つかりません。",
+    "planLimit": "プランの上限に達しました。アップグレードして続けてください。"
+  }
+}

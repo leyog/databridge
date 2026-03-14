@@ -1,0 +1,121 @@
+{
+  "nav": {
+    "features": "Features",
+    "pricing": "Pricing",
+    "login": "Log in",
+    "getStarted": "Get Started",
+    "dashboard": "Dashboard",
+    "templates": "Templates",
+    "jobs": "Jobs",
+    "settings": "Settings",
+    "logout": "Log out"
+  },
+  "hero": {
+    "badge": "AI-Powered Data Entry",
+    "title": "Turn Any File Into Structured Data",
+    "subtitle": "Upload Excel, PDF, images, or emails. AI extracts and structures the data. You review and approve. Data flows into your systems automatically.",
+    "cta": "Start for Free",
+    "ctaSub": "No credit card required",
+    "demo": "Watch Demo"
+  },
+  "features": {
+    "title": "Everything you need to automate data entry",
+    "subtitle": "From file upload to system integration, DataBridge handles the entire workflow.",
+    "items": {
+      "ai": { "title": "AI-Powered Extraction", "desc": "Supports Excel, PDF, images, emails and more. AI understands context and extracts structured data accurately." },
+      "review": { "title": "Human-in-the-Loop Review", "desc": "Every extraction goes through your review before being sent to your systems. Edit, approve, or reject with one click." },
+      "webhook": { "title": "Automatic System Integration", "desc": "Define your API endpoint once. Approved data is automatically sent to your CRM, ERP, or any business system." },
+      "template": { "title": "Reusable Templates", "desc": "Create templates with custom prompts and output schemas. Reuse them across your team for consistent results." },
+      "i18n": { "title": "Multi-Language Support", "desc": "Full support for English, Chinese, and Japanese. Your team works in their preferred language." },
+      "secure": { "title": "Enterprise Security", "desc": "SOC 2 compliant. Your data is encrypted at rest and in transit. We never train on your data." }
+    }
+  },
+  "pricing": {
+    "title": "Simple, transparent pricing",
+    "subtitle": "Start free, upgrade when you need more.",
+    "monthly": "Monthly",
+    "perUserMonth": "/user/month",
+    "free": {
+      "name": "Free",
+      "price": "0",
+      "desc": "For individuals getting started",
+      "cta": "Get Started Free",
+      "features": ["50 jobs per month", "2 templates", "Email support", "1 user"]
+    },
+    "pro": {
+      "name": "Professional",
+      "price": "20",
+      "desc": "For growing teams",
+      "cta": "Start 14-Day Trial",
+      "badge": "Most Popular",
+      "features": ["Unlimited jobs", "Unlimited templates", "Webhook integration", "Priority support", "14-day free trial", "Multiple users"]
+    },
+    "enterprise": {
+      "name": "Enterprise",
+      "price": "25",
+      "desc": "For large organizations",
+      "cta": "Contact Sales",
+      "features": ["Everything in Pro", "SSO / SAML", "Custom AI models", "SLA guarantee", "Dedicated support", "Custom contracts"]
+    }
+  },
+  "auth": {
+    "loginTitle": "Welcome back",
+    "loginSubtitle": "Sign in to your account",
+    "registerTitle": "Create your account",
+    "registerSubtitle": "Start your free account today",
+    "continueWithGoogle": "Continue with Google",
+    "orContinueWith": "Or continue with",
+    "email": "Email",
+    "password": "Password",
+    "name": "Full Name",
+    "signIn": "Sign In",
+    "signUp": "Sign Up",
+    "noAccount": "Don't have an account?",
+    "hasAccount": "Already have an account?",
+    "forgotPassword": "Forgot password?"
+  },
+  "app": {
+    "jobs": {
+      "title": "Jobs",
+      "new": "New Job",
+      "empty": "No jobs yet. Upload a file to get started.",
+      "status": {
+        "PENDING": "Pending",
+        "PROCESSING": "Processing",
+        "PARSED": "Parsed",
+        "REVIEWING": "Reviewing",
+        "APPROVED": "Approved",
+        "REJECTED": "Rejected",
+        "SENT": "Sent",
+        "FAILED": "Failed"
+      }
+    },
+    "templates": {
+      "title": "Templates",
+      "new": "New Template",
+      "empty": "No templates yet. Create one to start parsing files.",
+      "name": "Template Name",
+      "description": "Description",
+      "prompt": "AI Prompt",
+      "promptHint": "Describe what data to extract and how to structure it.",
+      "outputSchema": "Output Schema (JSON)",
+      "webhookUrl": "Webhook URL",
+      "webhookHeaders": "Webhook Headers (JSON)"
+    },
+    "review": {
+      "title": "Review Extraction",
+      "original": "Original File",
+      "extracted": "Extracted Data",
+      "approve": "Approve & Send",
+      "reject": "Reject",
+      "save": "Save Changes",
+      "note": "Review Note"
+    }
+  },
+  "errors": {
+    "generic": "Something went wrong. Please try again.",
+    "unauthorized": "You are not authorized to perform this action.",
+    "notFound": "The requested resource was not found.",
+    "planLimit": "You have reached your plan limit. Please upgrade to continue."
+  }
+}
