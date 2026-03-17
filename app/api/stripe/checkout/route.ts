@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { stripe, PLANS } from "@/lib/stripe";
 
 export async function POST(req: NextRequest) {
+  if (!stripe) return NextResponse.json({ error: "Stripe not configured" }, { status: 503 });
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
@@ -31,8 +32,8 @@ export async function POST(req: NextRequest) {
     customerId = customer.id;
     await prisma.subscription.upsert({
       where: { orgId: membership.orgId },
-      create: { orgId: membership.orgId, stripeCustomerId: customerId, plan: "FREE", status: "ACTIVE" },
-      update: { stripeCustomerId: customerId },
+      create: { orgId: membership.orgId, stripeCustomerId: customerId!, plan: "FREE", status: "ACTIVE" },
+      update: { stripeCustomerId: customerId! },
     });
   }
 
