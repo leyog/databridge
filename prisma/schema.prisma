@@ -53,6 +53,7 @@ model User {
   email         String?   @unique
   emailVerified DateTime?
   image         String?
+  password      String?   // hashed, null for OAuth users
   locale        String    @default("en-US")
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
@@ -60,7 +61,9 @@ model User {
   accounts      Account[]
   sessions      Session[]
   memberships   OrgMember[]
-  jobs          Job[]
+  jobs          Job[]         @relation("JobCreatedBy")
+  assignedJobs  Job[]         @relation("JobAssignedTo")
+  auditLogs     AuditLog[]
 }
 
 model Organization {
@@ -74,6 +77,13 @@ model Organization {
   templates   Template[]
   jobs        Job[]
   subscription Subscription?
+  apiKeys     ApiKey[]
+  emailInboxes EmailInbox[]
+  aiConfig    AiConfig?
+  invites     OrgInvite[]
+  emailAccounts EmailAccount[]
+  auditLogs   AuditLog[]
+  webhookEndpoints WebhookEndpoint[]
 }
 
 model OrgMember {
@@ -136,14 +146,22 @@ model Template {
   description String?
   prompt      String   @db.Text
   outputSchema Json    // JSON Schema defining expected output structure
-  webhookUrl  String?  // API endpoint to write back to
-  webhookHeaders Json? // Custom headers for webhook
+  webhookUrl  String?  // legacy: direct URL (kept for backward compat)
+  webhookHeaders Json? // legacy
+  webhookFormat String @default("raw")
+  webhookEndpointId String? // reference to shared WebhookEndpoint
+  slaDays     Int?
+  fieldRules  Json?
+  notifyOnNew Boolean  @default(false)
   active      Boolean  @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   org  Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
   jobs Job[]
+  emailInboxes EmailInbox[]
+  emailAccounts EmailAccount[]
+  webhookEndpoint WebhookEndpoint? @relation(fields: [webhookEndpointId], references: [id], onDelete: SetNull)
 }
 
 // ─── Job (Parse Task) ─────────────────────────────────────────────────────
@@ -160,6 +178,7 @@ model Job {
   fileUrl      String
   fileType     String    // mime type
   fileSize     Int
+  extractedText String?  @db.Text  // raw text extracted from file
 
   // AI Output
   rawResult    Json?     // raw AI response
@@ -172,6 +191,14 @@ model Job {
   reviewedAt   DateTime?
   reviewNote   String?
 
+  // Assignment
+  assignedToId String?   // assigned reviewer
+  assignedAt   DateTime?
+
+  // SLA
+  slaDeadline  DateTime? // computed from template.slaDays at creation
+  slaBreached  Boolean   @default(false)
+
   // Webhook
   webhookStatus WebhookStatus @default(PENDING)
   webhookResponse Json?
@@ -183,7 +210,8 @@ model Job {
 
   org        Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
   template   Template     @relation(fields: [templateId], references: [id])
-  createdBy  User         @relation(fields: [createdById], references: [id])
+  createdBy  User         @relation("JobCreatedBy", fields: [createdById], references: [id])
+  assignedTo User?        @relation("JobAssignedTo", fields: [assignedToId], references: [id])
 }
 
 enum JobStatus {
@@ -203,3 +231,122 @@ enum WebhookStatus {
   FAILED
   SKIPPED
 }
+
+// ─── API Keys ─────────────────────────────────────────────────────────────
+
+model ApiKey {
+  id          String   @id @default(cuid())
+  orgId       String
+  name        String
+  keyHash     String   @unique  // bcrypt hash of the actual key
+  keyPrefix   String            // first 8 chars for display (e.g. "db_live_")
+  lastUsedAt  DateTime?
+  expiresAt   DateTime?
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  org Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+}
+
+// ─── Email Inbox ──────────────────────────────────────────────────────────
+
+model EmailInbox {
+  id          String   @id @default(cuid())
+  orgId       String
+  templateId  String
+  address     String   @unique  // e.g. "acme-invoices@inbound.databridge.dev"
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  org      Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  template Template     @relation(fields: [templateId], references: [id])
+}
+
+// ─── Webhook Endpoint ─────────────────────────────────────────────────────
+
+model WebhookEndpoint {
+  id          String   @id @default(cuid())
+  orgId       String
+  name        String
+  url         String
+  headers     Json?    // custom headers
+  format      String   @default("raw") // "raw" | "zapier"
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  org       Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  templates Template[]
+}
+
+// ─── Audit Log ────────────────────────────────────────────────────────────
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  orgId     String
+  userId    String?
+  action    String   // e.g. "job.approve", "job.assign", "template.create"
+  entityType String  // "job" | "template" | "member" | "apikey"
+  entityId  String
+  meta      Json?    // extra context (old/new values, etc.)
+  ip        String?
+  createdAt DateTime @default(now())
+
+  org  Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  user User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+}
+
+// ─── Email Account (IMAP) ─────────────────────────────────────────────────
+
+model EmailAccount {
+  id          String   @id @default(cuid())
+  orgId       String
+  name        String                        // display name
+  email       String
+  imapHost    String
+  imapPort    Int      @default(993)
+  imapSecure  Boolean  @default(true)
+  username    String
+  password    String   @db.Text             // stored as-is; encrypt in prod
+  templateId  String?                       // default template for this inbox
+  active      Boolean  @default(true)
+  lastSyncAt  DateTime?
+  lastUid     Int      @default(0)          // last fetched UID for incremental sync
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  org      Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  template Template?    @relation(fields: [templateId], references: [id], onDelete: SetNull)
+}
+
+
+model OrgInvite {
+  id        String    @id @default(cuid())
+  orgId     String
+  email     String
+  role      OrgRole   @default(MEMBER)
+  token     String    @unique @default(cuid())
+  invitedBy String
+  expiresAt DateTime
+  acceptedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  org Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@unique([orgId, email])
+}
+
+
+model AiConfig {
+  id           String   @id @default(cuid())
+  orgId        String   @unique
+  provider     String   @default("anthropic") // "anthropic" | "openai" | "custom"
+  apiKey       String   @db.Text              // encrypted or plain — org-level override
+  baseUrl      String?                        // custom base URL (optional)
+  model        String?                        // model override, e.g. "claude-opus-4-5"
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  org Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+}
+

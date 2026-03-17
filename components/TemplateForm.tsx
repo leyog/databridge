@@ -13,6 +13,7 @@ interface TemplateFormProps {
     outputSchema: string;
     webhookUrl: string;
     webhookHeaders: string;
+    webhookFormat: string;
   };
   mode: "create" | "edit";
 }
@@ -35,6 +36,7 @@ export default function TemplateForm({ initialData, mode }: TemplateFormProps) {
     outputSchema: initialData?.outputSchema ?? DEFAULT_SCHEMA,
     webhookUrl: initialData?.webhookUrl ?? "",
     webhookHeaders: initialData?.webhookHeaders ?? "",
+    webhookFormat: initialData?.webhookFormat ?? "raw",
   });
   const [schemaError, setSchemaError] = useState("");
   const [headersError, setHeadersError] = useState("");
@@ -73,6 +75,7 @@ export default function TemplateForm({ initialData, mode }: TemplateFormProps) {
           outputSchema: JSON.parse(form.outputSchema),
           webhookUrl: form.webhookUrl || undefined,
           webhookHeaders: form.webhookHeaders ? JSON.parse(form.webhookHeaders) : undefined,
+          webhookFormat: form.webhookFormat,
         }),
       });
       const data = await res.json();
@@ -155,6 +158,25 @@ export default function TemplateForm({ initialData, mode }: TemplateFormProps) {
               className={`w-full font-mono text-xs border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none ${
                 headersError ? "border-red-300 bg-red-50" : "border-gray-200"
               }`} />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Webhook Format</label>
+            <select value={form.webhookFormat}
+              onChange={e => setForm(f => ({ ...f, webhookFormat: e.target.value }))}
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+              <option value="raw">Raw — send extracted data directly</option>
+              <option value="zapier">Zapier / Make — wrapped envelope with metadata</option>
+            </select>
+            {form.webhookFormat === "zapier" && (
+              <pre className="mt-2 text-xs bg-gray-50 border border-gray-100 rounded-lg p-3 text-gray-500 overflow-auto">{`{
+  "id": "<jobId>",
+  "fileName": "<file>",
+  "templateName": "<template>",
+  "status": "APPROVED",
+  "data": { ...extracted fields... },
+  "approvedAt": "<ISO timestamp>"
+}`}</pre>
+            )}
           </div>
         </div>
 

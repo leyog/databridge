@@ -1,106 +1,137 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { verifyApiKey } from "@/lib/api-auth";
+import { parseJobAsync } from "@/lib/parse-job";
+import { audit } from "@/lib/audit";
 
-// AI 解析文件内容
-async function parseWithAI(fileContent: string, prompt: string, outputSchema: object): Promise<{ data: any; confidence: number }> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  const baseUrl = process.env.ANTHROPIC_BASE_URL || "https://api.anthropic.com";
-
-  const systemPrompt = `You are a data extraction assistant. Extract structured data from the provided content according to the instructions and output schema.
-Always respond with valid JSON matching the schema. If a field cannot be extracted, use null.
-Output schema: ${JSON.stringify(outputSchema, null, 2)}`;
-
-  const userPrompt = `${prompt}\n\nContent to parse:\n${fileContent}`;
-
-  const res = await fetch(`${baseUrl}/v1/messages`, {
-    method: "POST",
-    headers: { "x-api-key": apiKey!, "anthropic-version": "2023-06-01", "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: "claude-sonnet-4-6",
-      system: systemPrompt,
-      messages: [{ role: "user", content: userPrompt }],
-      temperature: 0.1,
-      max_tokens: 2000,
-    }),
-  });
-
-  const data = await res.json();
-  const text = data.content?.[0]?.text ?? "{}";
-
-  // Extract JSON from response
-  const match = text.match(/```json\n?([\s\S]*?)\n?```/) || text.match(/(\{[\s\S]*\})/);
-  const jsonStr = match ? match[1] : text;
-
-  try {
-    const parsed = JSON.parse(jsonStr);
-    return { data: parsed, confidence: 0.9 };
-  } catch {
-    return { data: {}, confidence: 0.1 };
+async function getOrgAndUser(req: NextRequest) {
+  const session = await auth();
+  if (session?.user?.id) {
+    const membership = await prisma.orgMember.findFirst({ where: { userId: session.user.id } });
+    if (membership) return { orgId: membership.orgId, userId: session.user.id };
   }
+  const apiAuth = await verifyApiKey(req);
+  if (apiAuth.ok) {
+    const owner = await prisma.orgMember.findFirst({
+      where: { orgId: apiAuth.orgId, role: "OWNER" },
+      select: { userId: true },
+    });
+    return { orgId: apiAuth.orgId, userId: owner?.userId ?? null };
+  }
+  return null;
+}
+
+function calcSlaDeadline(slaDays: number | null | undefined): Date | null {
+  if (!slaDays) return null;
+  const d = new Date();
+  d.setDate(d.getDate() + slaDays);
+  return d;
 }
 
 export async function GET(req: NextRequest) {
-  const session = await auth();
-  if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const ctx = await getOrgAndUser(req);
+  if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const membership = await prisma.orgMember.findFirst({ where: { userId: session.user.id } });
-  if (!membership) return NextResponse.json({ error: "No org" }, { status: 403 });
+  const { searchParams } = new URL(req.url);
+  const status = searchParams.get("status");
+  const templateId = searchParams.get("templateId");
+  const assignedToId = searchParams.get("assignedTo");
+  const slaBreached = searchParams.get("slaBreached");
+  const search = searchParams.get("search");
+  const limit = Math.min(parseInt(searchParams.get("limit") ?? "50"), 200);
+  const page = Math.max(parseInt(searchParams.get("page") ?? "1"), 1);
+  const skip = (page - 1) * limit;
 
-  const jobs = await prisma.job.findMany({
-    where: { orgId: membership.orgId },
-    include: { template: { select: { id: true, name: true } }, createdBy: { select: { name: true, email: true } } },
-    orderBy: { createdAt: "desc" },
-    take: 50,
+  const where = {
+    orgId: ctx.orgId,
+    ...(status ? { status: status as any } : {}),
+    ...(templateId ? { templateId } : {}),
+    ...(assignedToId ? { assignedToId } : {}),
+    ...(slaBreached === "true" ? { slaBreached: true } : {}),
+    ...(search ? { fileName: { contains: search, mode: "insensitive" as const } } : {}),
+  };
+
+  const [jobs, total] = await Promise.all([
+    prisma.job.findMany({
+      where,
+      include: {
+        template: { select: { id: true, name: true } },
+        createdBy: { select: { name: true, email: true } },
+        assignedTo: { select: { id: true, name: true, email: true } },
+      },
+      orderBy: { createdAt: "desc" },
+      take: limit,
+      skip,
+    }),
+    prisma.job.count({ where }),
+  ]);
+
+  return NextResponse.json({
+    jobs,
+    total,
+    page,
+    limit,
+    totalPages: Math.ceil(total / limit),
   });
-  return NextResponse.json(jobs);
 }
 
 export async function POST(req: NextRequest) {
-  const session = await auth();
-  if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const membership = await prisma.orgMember.findFirst({ where: { userId: session.user.id } });
-  if (!membership) return NextResponse.json({ error: "No org" }, { status: 403 });
+  const ctx = await getOrgAndUser(req);
+  if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await req.json();
-  const { templateId, fileName, fileContent, fileType, fileSize } = body;
 
+  if (body.jobs && Array.isArray(body.jobs)) {
+    const { templateId, jobs } = body;
+    if (!templateId) return NextResponse.json({ error: "templateId required" }, { status: 400 });
+    if (jobs.length > 50) return NextResponse.json({ error: "Max 50 jobs per batch" }, { status: 400 });
+
+    const template = await prisma.template.findFirst({ where: { id: templateId, orgId: ctx.orgId } });
+    if (!template) return NextResponse.json({ error: "Template not found" }, { status: 404 });
+
+    const created = await Promise.all(jobs.map(async (j: any) => {
+      const job = await prisma.job.create({
+        data: {
+          orgId: ctx.orgId, templateId,
+          createdById: ctx.userId ?? "system",
+          status: "PROCESSING",
+          fileName: j.fileName, fileUrl: j.fileUrl ?? "",
+          fileType: j.fileType ?? "text/plain",
+          fileSize: j.fileSize ?? j.fileContent?.length ?? 0,
+          extractedText: j.fileContent ?? null,
+          slaDeadline: calcSlaDeadline((template as any).slaDays),
+        },
+      });
+      parseJobAsync(job.id, j.fileContent, template, j.imageBase64 ?? undefined, j.imageMime ?? undefined).catch(() => {});
+      audit({ orgId: ctx.orgId, userId: ctx.userId, action: "job.create", entityType: "job", entityId: job.id });
+      return { id: job.id, fileName: job.fileName, status: "PROCESSING" };
+    }));
+
+    return NextResponse.json({ jobs: created }, { status: 201 });
+  }
+
+  const { templateId, fileName, fileContent, fileType, fileSize, fileUrl, imageBase64, imageMime } = body;
   if (!templateId || !fileName || !fileContent)
     return NextResponse.json({ error: "templateId, fileName, fileContent required" }, { status: 400 });
 
-  const template = await prisma.template.findFirst({
-    where: { id: templateId, orgId: membership.orgId },
-  });
+  const template = await prisma.template.findFirst({ where: { id: templateId, orgId: ctx.orgId } });
   if (!template) return NextResponse.json({ error: "Template not found" }, { status: 404 });
 
-  // Create job
   const job = await prisma.job.create({
     data: {
-      orgId: membership.orgId,
-      templateId,
-      createdById: session.user.id,
+      orgId: ctx.orgId, templateId,
+      createdById: ctx.userId ?? "system",
       status: "PROCESSING",
-      fileName,
-      fileUrl: "",
-      fileType: fileType || "text/plain",
-      fileSize: fileSize || fileContent.length,
+      fileName, fileUrl: fileUrl ?? "",
+      fileType: fileType ?? "text/plain",
+      fileSize: fileSize ?? fileContent.length,
+      extractedText: fileContent ?? null,
+      slaDeadline: calcSlaDeadline((template as any).slaDays),
     },
   });
 
-  // Parse async
-  try {
-    const { data, confidence } = await parseWithAI(fileContent, template.prompt, template.outputSchema as object);
-    await prisma.job.update({
-      where: { id: job.id },
-      data: { status: "PARSED", parsedData: data, confidence },
-    });
-    return NextResponse.json({ ...job, status: "PARSED", parsedData: data }, { status: 201 });
-  } catch (e: any) {
-    await prisma.job.update({
-      where: { id: job.id },
-      data: { status: "FAILED", errorMessage: e.message },
-    });
-    return NextResponse.json({ error: "Parsing failed", jobId: job.id }, { status: 500 });
-  }
+  parseJobAsync(job.id, fileContent, template, imageBase64 ?? undefined, imageMime ?? undefined).catch(() => {});
+  audit({ orgId: ctx.orgId, userId: ctx.userId, action: "job.create", entityType: "job", entityId: job.id });
+  return NextResponse.json({ ...job, status: "PROCESSING" }, { status: 201 });
 }

@@ -27,6 +27,7 @@ export default async function EditTemplatePage({ params }: { params: Promise<{ i
         outputSchema: JSON.stringify(template.outputSchema, null, 2),
         webhookUrl: template.webhookUrl ?? "",
         webhookHeaders: template.webhookHeaders ? JSON.stringify(template.webhookHeaders, null, 2) : "",
+        webhookFormat: template.webhookFormat ?? "raw",
       }}
     />
   );

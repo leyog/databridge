@@ -27,7 +27,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   const body = await req.json();
-  const { name, description, prompt, outputSchema, webhookUrl, webhookHeaders, active } = body;
+  const { name, description, prompt, outputSchema, webhookUrl, webhookHeaders, webhookFormat, active } = body;
 
   const updated = await prisma.template.update({
     where: { id },
@@ -38,6 +38,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       ...(outputSchema !== undefined && { outputSchema }),
       ...(webhookUrl !== undefined && { webhookUrl: webhookUrl || null }),
       ...(webhookHeaders !== undefined && { webhookHeaders: webhookHeaders || null }),
+      ...(webhookFormat !== undefined && { webhookFormat }),
       ...(active !== undefined && { active }),
     },
   });

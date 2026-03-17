@@ -1,0 +1,1 @@
+Vendor: Acme Corp\nInvoice: INV-001\nTotal: $500

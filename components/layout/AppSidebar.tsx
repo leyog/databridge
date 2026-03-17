@@ -3,7 +3,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { useTranslations } from "next-intl";
-import { FileText, LayoutDashboard, FileCode, Settings, LogOut, ChevronDown } from "lucide-react";
+import { FileText, LayoutDashboard, FileCode, Settings, LogOut, ChevronDown, BarChart2 } from "lucide-react";
 import Image from "next/image";
 
 interface Props {
@@ -19,6 +19,7 @@ export default function AppSidebar({ org, user }: Props) {
     { href: "/app", label: t("dashboard"), icon: LayoutDashboard },
     { href: "/app/jobs", label: t("jobs"), icon: FileText },
     { href: "/app/templates", label: t("templates"), icon: FileCode },
+    { href: "/app/analytics", label: "Analytics", icon: BarChart2 },
     { href: "/app/settings", label: t("settings"), icon: Settings },
   ];
 

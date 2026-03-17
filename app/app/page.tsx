@@ -2,7 +2,7 @@ import { auth } from "@/auth";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
-import { FileText, TrendingUp, CheckCircle, Clock } from "lucide-react";
+import { FileText, TrendingUp, CheckCircle, Clock, AlertCircle } from "lucide-react";
 
 export default async function AppDashboard() {
   const session = await auth();
@@ -15,10 +15,11 @@ export default async function AppDashboard() {
   if (!membership) redirect("/login");
 
   const orgId = membership.orgId;
-  const [totalJobs, pendingReview, sentJobs, recentJobs] = await Promise.all([
+  const [totalJobs, pendingReview, sentJobs, failedJobs, recentJobs] = await Promise.all([
     prisma.job.count({ where: { orgId } }),
     prisma.job.count({ where: { orgId, status: { in: ["PARSED", "REVIEWING"] } } }),
     prisma.job.count({ where: { orgId, status: "SENT" } }),
+    prisma.job.count({ where: { orgId, status: "FAILED" } }),
     prisma.job.findMany({
       where: { orgId },
       include: { template: { select: { name: true } } },
@@ -45,11 +46,12 @@ export default async function AppDashboard() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-4 gap-4 mb-6">
         {[
           { icon: FileText, label: "Total Jobs", value: totalJobs, color: "text-blue-500", bg: "bg-blue-50" },
           { icon: Clock, label: "Pending Review", value: pendingReview, color: "text-orange-500", bg: "bg-orange-50" },
           { icon: CheckCircle, label: "Sent to System", value: sentJobs, color: "text-green-500", bg: "bg-green-50" },
+          { icon: AlertCircle, label: "Failed", value: failedJobs, color: "text-red-500", bg: "bg-red-50" },
         ].map(({ icon: Icon, label, value, color, bg }) => (
           <div key={label} className="bg-white rounded-xl border border-gray-100 p-4">
             <div className="flex items-center justify-between mb-3">
