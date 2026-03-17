@@ -1,4 +1,0 @@
-Vendor: Acme Corp
-Invoice Number: INV-2024-0892
-Date: 2024-03-15
-Total: $12,450.00
