@@ -20,6 +20,20 @@ const ALLOWED_TYPES: Record<string, string> = {
   "text/xml": "xml", "application/xml": "xml",
 };
 
+async function saveFile(buf: Buffer, fileName: string, mimeType: string): Promise<string> {
+  // Use Vercel Blob if token is available
+  if (process.env.BLOB_READ_WRITE_TOKEN) {
+    const { put } = await import("@vercel/blob");
+    const blob = await put(`uploads/${fileName}`, buf, { access: "public", contentType: mimeType });
+    return blob.url;
+  }
+  // Local fallback
+  await mkdir(UPLOAD_DIR, { recursive: true });
+  const filePath = path.join(UPLOAD_DIR, fileName);
+  await writeFile(filePath, buf);
+  return `/api/uploads/${fileName}`;
+}
+
 export async function POST(req: NextRequest) {
   let orgId: string | null = null;
 
@@ -44,22 +58,35 @@ export async function POST(req: NextRequest) {
   if (!ALLOWED_TYPES[mimeType]) return NextResponse.json({ error: `Unsupported file type: ${mimeType}` }, { status: 400 });
   if (file.size > MAX_SIZE) return NextResponse.json({ error: "File too large (max 20MB)" }, { status: 400 });
 
-  await mkdir(UPLOAD_DIR, { recursive: true });
   const ext = ALLOWED_TYPES[mimeType];
   const fileName = `${Date.now()}-${crypto.randomBytes(6).toString("hex")}.${ext}`;
-  const filePath = path.join(UPLOAD_DIR, fileName);
-  await writeFile(filePath, Buffer.from(await file.arrayBuffer()));
+  const buf = Buffer.from(await file.arrayBuffer());
 
-  const { text, pageCount, imageBase64, imageMime } = await extractText(filePath, mimeType);
+  const fileUrl = await saveFile(buf, fileName, mimeType);
 
-  // Auto-classify if requested
+  // For extraction, write to tmp if using Blob (no local path)
+  let extractResult;
+  if (process.env.BLOB_READ_WRITE_TOKEN) {
+    // Pass buffer directly via temp file
+    const os = await import("os");
+    const tmpPath = path.join(os.tmpdir(), fileName);
+    await writeFile(tmpPath, buf);
+    extractResult = await extractText(tmpPath, mimeType);
+    import("fs").then(fs => fs.unlinkSync(tmpPath)).catch(() => {});
+  } else {
+    const filePath = path.join(UPLOAD_DIR, fileName);
+    extractResult = await extractText(filePath, mimeType);
+  }
+
+  const { text, pageCount, imageBase64, imageMime } = extractResult;
+
   let suggestedTemplateId: string | null = null;
   if (autoClassify) {
     suggestedTemplateId = await classifyDocument(text, orgId).catch(() => null);
   }
 
   return NextResponse.json({
-    fileUrl: `/api/uploads/${fileName}`,
+    fileUrl,
     fileName: file.name,
     fileType: mimeType,
     fileSize: file.size,

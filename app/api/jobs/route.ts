@@ -99,7 +99,7 @@ export async function POST(req: NextRequest) {
           fileName: j.fileName, fileUrl: j.fileUrl ?? "",
           fileType: j.fileType ?? "text/plain",
           fileSize: j.fileSize ?? j.fileContent?.length ?? 0,
-          extractedText: j.fileContent ?? null,
+          extractedText: j.imageBase64 ? "[IMAGE_FILE]" : (j.fileContent ?? null),
           slaDeadline: calcSlaDeadline((template as any).slaDays),
         },
       });
@@ -118,6 +118,7 @@ export async function POST(req: NextRequest) {
   const template = await prisma.template.findFirst({ where: { id: templateId, orgId: ctx.orgId } });
   if (!template) return NextResponse.json({ error: "Template not found" }, { status: 404 });
 
+  const isImage = !!imageBase64;
   const job = await prisma.job.create({
     data: {
       orgId: ctx.orgId, templateId,
@@ -126,7 +127,8 @@ export async function POST(req: NextRequest) {
       fileName, fileUrl: fileUrl ?? "",
       fileType: fileType ?? "text/plain",
       fileSize: fileSize ?? fileContent.length,
-      extractedText: fileContent ?? null,
+      // Don't store raw base64 in DB — store placeholder for images
+      extractedText: isImage ? "[IMAGE_FILE]" : (fileContent ?? null),
       slaDeadline: calcSlaDeadline((template as any).slaDays),
     },
   });
