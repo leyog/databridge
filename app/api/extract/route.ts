@@ -1,19 +1,30 @@
 import { NextRequest, NextResponse } from "next/server";
-import { execFile } from "child_process";
-import { writeFile, unlink } from "fs/promises";
-import { tmpdir } from "os";
-import { join } from "path";
-import { randomBytes } from "crypto";
 
 async function extractPdf(buf: Buffer): Promise<string> {
-  const tmp = join(tmpdir(), `pdf_${randomBytes(6).toString("hex")}.pdf`);
-  await writeFile(tmp, buf);
-  return new Promise((resolve) => {
-    execFile("pdftotext", [tmp, "-"], { maxBuffer: 10 * 1024 * 1024 }, async (err, stdout) => {
-      await unlink(tmp).catch(() => {});
-      resolve(stdout || "");
+  // Try pdftotext first (local/server), fallback to pdf-parse (Vercel)
+  try {
+    const { execFile } = await import("child_process");
+    const { writeFile, unlink } = await import("fs/promises");
+    const { tmpdir } = await import("os");
+    const { join } = await import("path");
+    const { randomBytes } = await import("crypto");
+    const tmp = join(tmpdir(), `pdf_${randomBytes(6).toString("hex")}.pdf`);
+    await writeFile(tmp, buf);
+    const text = await new Promise<string>((resolve, reject) => {
+      execFile("pdftotext", [tmp, "-"], { maxBuffer: 10 * 1024 * 1024 }, async (err, stdout) => {
+        await unlink(tmp).catch(() => {});
+        if (err) reject(err);
+        else resolve(stdout || "");
+      });
     });
-  });
+    return text;
+  } catch {
+    // Fallback: pdf-parse (pure JS, works on Vercel)
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const pdfParse = require("pdf-parse");
+    const result = await pdfParse(buf);
+    return result.text;
+  }
 }
 
 async function extractExcel(buf: Buffer): Promise<string> {
