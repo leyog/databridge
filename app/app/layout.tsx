@@ -2,6 +2,7 @@ import { auth } from "@/auth";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import AppSidebar from "@/components/layout/AppSidebar";
+import ChatWidget from "@/components/ChatWidget";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const session = await auth();
@@ -20,6 +21,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <main className="flex-1 overflow-auto">
         {children}
       </main>
+      <ChatWidget />
     </div>
   );
 }
