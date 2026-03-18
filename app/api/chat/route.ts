@@ -33,12 +33,12 @@ export async function POST(req: NextRequest) {
     fetch: async (url, init) => {
       if (init?.body) {
         const body = JSON.parse(init.body.toString());
-        // Fix: some proxies don't support system as array, convert to string
         if (Array.isArray(body.system)) {
           body.system = body.system.map((s: any) => s.text ?? "").join("\n");
-          init = { ...init, body: JSON.stringify(body) };
         }
-        console.log("[chat] request body:", JSON.stringify(body));
+        // Force stream: true in body for proxy compatibility
+        body.stream = true;
+        init = { ...init, body: JSON.stringify(body) };
       }
       return fetch(url, init);
     },
