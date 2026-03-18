@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
   const aiConfig = await prisma.aiConfig.findUnique({ where: { orgId } });
   const apiKey = aiConfig?.apiKey || process.env.ANTHROPIC_API_KEY!;
   const baseURL = aiConfig?.baseUrl || process.env.ANTHROPIC_BASE_URL || "https://api.anthropic.com";
-  const model = aiConfig?.model || "claude-sonnet-4-6";
+  const model = aiConfig?.model || process.env.ANTHROPIC_MODEL || "claude-sonnet-4-20250514";
 
   const anthropic = createAnthropic({ apiKey, baseURL });
   const cookie = req.headers.get("cookie") || "";
@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
       headers: { "Content-Type": "application/json", Cookie: cookie, ...(init?.headers as Record<string, string>) },
     });
 
-  const result = await streamText({
+  const result = streamText({
     model: anthropic(model),
     system: `You are DataBridge Assistant, an AI helper embedded in the DataBridge document processing platform.
 Help users manage document processing workflows through natural language.
@@ -42,6 +42,9 @@ You can: list/create templates, view jobs, manage webhook endpoints, show analyt
 Respond in the same language the user uses. Be concise and action-oriented.`,
     messages,
     maxSteps: 5,
+    onError: (error) => {
+      console.error("[chat] streamText error:", JSON.stringify(error, null, 2));
+    },
     tools: {
       list_jobs: tool({
         description: "List recent jobs with optional status filter",
