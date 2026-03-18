@@ -58,8 +58,13 @@ async function extractPdf(buf: Buffer, aiConfig: AiConfig): Promise<string> {
         ]}]
       })
     });
-    if (!res.ok) { const e = await res.text(); throw new Error(`API error: ${res.status} ${e}`); }
+    if (!res.ok) {
+      const e = await res.text();
+      console.error("[extractPdf] API error:", res.status, e);
+      throw new Error(`API error: ${res.status} ${e}`);
+    }
     const json = await res.json();
+    console.log("[extractPdf] API response content types:", json.content?.map((c: any) => c.type));
     return json.content?.[0]?.text || "";
   }
 }
