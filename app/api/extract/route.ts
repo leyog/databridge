@@ -79,7 +79,7 @@ async function extractEml(buf: Buffer): Promise<string> {
   return parts.join("\n");
 }
 
-
+export async function POST(req: NextRequest) {
   try {
     const buf = Buffer.from(await req.arrayBuffer());
     const ct = req.headers.get("content-type") || "";
