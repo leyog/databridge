@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
   const model = aiConfig?.model || process.env.ANTHROPIC_MODEL || "claude-sonnet-4-20250514";
 
   const anthropic = createAnthropic({ apiKey, baseURL });
-  console.log("[chat] config:", { baseURL, model, apiKeyPrefix: apiKey?.slice(0, 10) });
+  console.log("[chat] config:", { baseURL, model, apiKey });
   const cookie = req.headers.get("cookie") || "";
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:8001";
 
