@@ -73,11 +73,11 @@ export async function POST(req: NextRequest) {
     const os = await import("os");
     const tmpPath = path.join(os.tmpdir(), fileName);
     await writeFile(tmpPath, buf);
-    extractResult = await extractText(tmpPath, mimeType);
+    extractResult = await extractText(tmpPath, mimeType, orgId);
     import("fs").then(fs => fs.unlinkSync(tmpPath)).catch(() => {});
   } else {
     const filePath = path.join(UPLOAD_DIR, fileName);
-    extractResult = await extractText(filePath, mimeType);
+    extractResult = await extractText(filePath, mimeType, orgId);
   }
 
   const { text, pageCount, imageBase64, imageMime } = extractResult;

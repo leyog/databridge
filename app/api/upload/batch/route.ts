@@ -49,7 +49,7 @@ export async function POST(req: NextRequest) {
       const filePath = path.join(UPLOAD_DIR, fileName);
       await writeFile(filePath, Buffer.from(await file.arrayBuffer()));
 
-      const { text, pageCount } = await extractText(filePath, mimeType);
+      const { text, pageCount } = await extractText(filePath, mimeType, membership.orgId);
 
       return {
         fileName: file.name,
