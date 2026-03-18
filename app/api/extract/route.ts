@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 async function extractPdf(buf: Buffer): Promise<string> {
-  // Try pdftotext first (local/server), fallback to pdf-parse (Vercel)
+  // Try pdftotext first (local/server)
   try {
     const { execFile } = await import("child_process");
     const { writeFile, unlink } = await import("fs/promises");
@@ -17,13 +17,20 @@ async function extractPdf(buf: Buffer): Promise<string> {
         else resolve(stdout || "");
       });
     });
-    return text;
+    if (text.trim()) return text;
+    throw new Error("empty");
   } catch {
-    // Fallback: pdf-parse (pure JS, works on Vercel)
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const pdfParse = require("pdf-parse");
-    const result = await pdfParse(buf);
-    return result.text;
+    // Fallback: pdfjs-dist (pure JS, works on Vercel)
+    const pdfjsLib = await import("pdfjs-dist/legacy/build/pdf.mjs" as any);
+    const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(buf) });
+    const pdf = await loadingTask.promise;
+    const pages: string[] = [];
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const content = await page.getTextContent();
+      pages.push(content.items.map((item: any) => item.str).join(" "));
+    }
+    return pages.join("\n");
   }
 }
 
