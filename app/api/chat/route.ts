@@ -37,16 +37,18 @@ export async function POST(req: NextRequest) {
           body.system = body.system.map((s: any) => s.text ?? "").join("\n");
         }
         body.stream = true;
-        const newBody = JSON.stringify(body);
-        console.log("[chat] final request body:", newBody);
-        init = { ...init, body: newBody };
+        // Fix empty input_schema for tools
+        if (Array.isArray(body.tools)) {
+          body.tools = body.tools.map((t: any) => ({
+            ...t,
+            input_schema: (t.input_schema && Object.keys(t.input_schema).length > 1)
+              ? t.input_schema
+              : { type: "object", properties: {} },
+          }));
+        }
+        init = { ...init, body: JSON.stringify(body) };
       }
-      const res = await fetch(url, init);
-      if (!res.ok) {
-        const text = await res.clone().text();
-        console.error("[chat] proxy response:", res.status, text);
-      }
-      return res;
+      return fetch(url, init);
     },
   });
   console.log("[chat] config:", { baseURL, model });
