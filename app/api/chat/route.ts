@@ -38,6 +38,7 @@ export async function POST(req: NextRequest) {
           body.system = body.system.map((s: any) => s.text ?? "").join("\n");
           init = { ...init, body: JSON.stringify(body) };
         }
+        console.log("[chat] request body:", JSON.stringify(body));
       }
       return fetch(url, init);
     },
