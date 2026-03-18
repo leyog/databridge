@@ -53,7 +53,7 @@ async function extractEml(buf: Buffer): Promise<string> {
   // Email headers
   parts.push(`Subject: ${parsed.subject ?? ""}`);
   parts.push(`From: ${parsed.from?.text ?? ""}`);
-  parts.push(`To: ${parsed.to?.text ?? ""}`);
+  parts.push(`To: ${Array.isArray(parsed.to) ? parsed.to.map(a => a.text).join(", ") : parsed.to?.text ?? ""}`);
   parts.push(`Date: ${parsed.date?.toISOString() ?? ""}`);
   parts.push("");
 
