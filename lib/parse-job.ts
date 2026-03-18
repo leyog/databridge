@@ -6,13 +6,13 @@ export async function parseJobAsync(jobId: string, fileContent: string, template
   const job = await prisma.job.findUnique({ where: { id: jobId }, select: { orgId: true } });
   const aiConfig = job ? await prisma.aiConfig.findUnique({ where: { orgId: job.orgId } }) : null;
 
-  const apiKey = aiConfig?.apiKey || process.env.ANTHROPIC_API_KEY;
-  const baseUrl = aiConfig?.baseUrl || process.env.ANTHROPIC_BASE_URL || "https://api.anthropic.com";
+  const apiKey = aiConfig?.apiKey;
+  const baseUrl = (aiConfig?.baseUrl || "https://api.anthropic.com").replace(/\/$/, "");
 
   if (!apiKey) {
     await prisma.job.update({
       where: { id: jobId },
-      data: { status: "FAILED", errorMessage: "No API key configured. Please go to Settings → AI Config to set up your API key." },
+      data: { status: "FAILED", errorMessage: "请先在设置页面配置 AI Provider（API Key）后再使用。" },
     });
     return;
   }

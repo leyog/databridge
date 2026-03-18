@@ -53,7 +53,7 @@ async function extractPdf(buf: Buffer, aiConfig: AiConfig): Promise<string> {
         model,
         max_tokens: 4096,
         messages: [{ role: "user", content: [
-          { type: "document", source: { type: "base64", media_type: "application/pdf", data: base64 } },
+          { type: "image", source: { type: "base64", media_type: "application/pdf", data: base64 } },
           { type: "text", text: "Extract all text content from this PDF. Return only the raw text, no formatting or commentary." }
         ]}]
       })
