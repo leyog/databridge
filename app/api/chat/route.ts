@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { createAnthropic } from "@ai-sdk/anthropic";
+import { createOpenAI } from "@ai-sdk/openai";
 import { streamText, tool } from "ai";
 import { z } from "zod";
 import { auth } from "@/auth";
@@ -13,6 +14,18 @@ async function getOrgId(userId: string) {
   return m?.orgId ?? null;
 }
 
+function buildModel(apiKey: string, baseURL: string, modelName: string) {
+  // If baseURL looks like an OpenAI-compatible endpoint (not api.anthropic.com), use openai SDK
+  const isAnthropic = baseURL.includes("api.anthropic.com");
+  if (isAnthropic) {
+    const anthropic = createAnthropic({ apiKey, baseURL });
+    return anthropic(modelName);
+  }
+  // OpenAI-compatible
+  const openai = createOpenAI({ apiKey, baseURL, compatibility: "compatible" });
+  return openai(modelName);
+}
+
 export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session?.user?.id) return new Response("Unauthorized", { status: 401 });
@@ -24,75 +37,9 @@ export async function POST(req: NextRequest) {
 
   const aiConfig = await prisma.aiConfig.findUnique({ where: { orgId } });
   const apiKey = aiConfig?.apiKey || process.env.ANTHROPIC_API_KEY!;
-  const baseURL = aiConfig?.baseUrl || process.env.ANTHROPIC_BASE_URL || "https://api.anthropic.com";
+  const baseURL = (aiConfig?.baseUrl || process.env.ANTHROPIC_BASE_URL || "https://api.anthropic.com").replace(/\/$/, "");
   const model = aiConfig?.model || process.env.ANTHROPIC_MODEL || "claude-sonnet-4-20250514";
 
-  const anthropic = createAnthropic({
-    apiKey,
-    baseURL,
-    fetch: async (url, init) => {
-      if (init?.body) {
-        const body = JSON.parse(init.body.toString());
-        if (Array.isArray(body.system)) {
-          body.system = body.system.map((s: any) => s.text ?? "").join("\n");
-        }
-        body.stream = true;
-        // Fix empty input_schema for tools - inject real schemas
-        const toolSchemas: Record<string, any> = {
-          list_jobs: {
-            type: "object",
-            properties: {
-              status: { type: "string", enum: ["PENDING","PROCESSING","PARSED","REVIEWING","APPROVED","REJECTED","SENT","FAILED"] },
-              limit: { type: "number", minimum: 1, maximum: 50, default: 10 },
-            },
-          },
-          list_templates: { type: "object", properties: {} },
-          create_template: {
-            type: "object",
-            required: ["name", "prompt", "outputSchema"],
-            properties: {
-              name: { type: "string" },
-              description: { type: "string" },
-              prompt: { type: "string" },
-              outputSchema: { type: "object" },
-            },
-          },
-          get_analytics: {
-            type: "object",
-            properties: { days: { type: "number", minimum: 1, maximum: 90, default: 30 } },
-          },
-          list_webhook_endpoints: { type: "object", properties: {} },
-          create_webhook_endpoint: {
-            type: "object",
-            required: ["name", "url"],
-            properties: {
-              name: { type: "string" },
-              url: { type: "string" },
-              format: { type: "string", enum: ["raw", "zapier"], default: "raw" },
-            },
-          },
-          approve_job: {
-            type: "object",
-            required: ["jobId"],
-            properties: { jobId: { type: "string" } },
-          },
-          bulk_approve: {
-            type: "object",
-            required: ["jobIds"],
-            properties: { jobIds: { type: "array", items: { type: "string" } } },
-          },
-        };
-        if (Array.isArray(body.tools)) {
-          body.tools = body.tools.map((t: any) => ({
-            ...t,
-            input_schema: toolSchemas[t.name] ?? { type: "object", properties: {} },
-          }));
-        }
-        init = { ...init, body: JSON.stringify(body) };
-      }
-      return fetch(url, init);
-    },
-  });
   console.log("[chat] config:", { baseURL, model });
   const cookie = req.headers.get("cookie") || "";
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:8001";
@@ -105,7 +52,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const result = await streamText({
-    model: anthropic(model),
+    model: buildModel(apiKey, baseURL, model),
     system: `You are DataBridge Assistant, an AI helper embedded in the DataBridge document processing platform.
 Help users manage document processing workflows through natural language.
 You can: list/create templates, view jobs, manage webhook endpoints, show analytics.
