@@ -37,7 +37,7 @@ async function extractPdf(buf: Buffer, aiConfig: { apiKey?: string | null; baseU
     const apiKey = aiConfig?.apiKey || "";
     const baseURL = (aiConfig?.baseUrl || "").replace(/\/$/, "");
     const model = aiConfig?.model || "claude-sonnet-4-6";
-    if (!apiKey || !baseURL) throw new Error("AI config not found, cannot extract PDF");
+    if (!apiKey || !baseURL) throw new Error("请先在设置页面配置 AI Provider（API Key 和 Base URL）后再上传文件。");
     const base64 = buf.toString("base64");
     const res = await fetch(`${baseURL}/messages`, {
       method: "POST",
