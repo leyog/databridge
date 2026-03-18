@@ -136,7 +136,12 @@ Respond in the same language the user uses. Be concise and action-oriented.`,
     },
   });
 
-    return result.toDataStreamResponse();
+    return result.toDataStreamResponse({
+      getErrorMessage: (error) => {
+        console.error("[chat] stream error:", JSON.stringify(error));
+        return error instanceof Error ? error.message : String(error);
+      },
+    });
   } catch (e: any) {
     console.error("[chat] caught error:", e?.message, e?.status, JSON.stringify(e?.responseBody ?? e));
     return new Response(JSON.stringify({ error: e?.message }), { status: 500, headers: { "Content-Type": "application/json" } });
