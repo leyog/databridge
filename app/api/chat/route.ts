@@ -38,7 +38,8 @@ export async function POST(req: NextRequest) {
       headers: { "Content-Type": "application/json", Cookie: cookie, ...(init?.headers as Record<string, string>) },
     });
 
-  const result = await streamText({
+  try {
+    const result = await streamText({
     model: anthropic(model),
     system: `You are DataBridge Assistant, an AI helper embedded in the DataBridge document processing platform.
 Help users manage document processing workflows through natural language.
@@ -135,5 +136,9 @@ Respond in the same language the user uses. Be concise and action-oriented.`,
     },
   });
 
-  return result.toDataStreamResponse();
+    return result.toDataStreamResponse();
+  } catch (e: any) {
+    console.error("[chat] caught error:", e?.message, e?.status, JSON.stringify(e?.responseBody ?? e));
+    return new Response(JSON.stringify({ error: e?.message }), { status: 500, headers: { "Content-Type": "application/json" } });
+  }
 }
