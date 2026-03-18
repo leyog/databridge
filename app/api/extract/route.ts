@@ -35,9 +35,11 @@ async function extractPdf(buf: Buffer, aiConfig: { apiKey?: string | null; baseU
   } catch {
     // Fallback: call Anthropic API directly with PDF as base64
     const apiKey = aiConfig?.apiKey || "";
-    const baseURL = (aiConfig?.baseUrl || "").replace(/\/$/, "");
-    const model = aiConfig?.model || "claude-sonnet-4-6";
-    if (!apiKey || !baseURL) throw new Error("请先在设置页面配置 AI Provider（API Key 和 Base URL）后再上传文件。");
+    if (!apiKey) throw new Error("请先在设置页面配置 AI Provider（API Key）后再上传文件。");
+    const provider = (aiConfig as any)?.provider || "anthropic";
+    const defaultBaseUrl = provider === "openai" ? "https://api.openai.com/v1" : "https://api.anthropic.com";
+    const baseURL = (aiConfig?.baseUrl || defaultBaseUrl).replace(/\/$/, "");
+    const model = aiConfig?.model || (provider === "openai" ? "gpt-4o" : "claude-sonnet-4-6");
     const base64 = buf.toString("base64");
     const res = await fetch(`${baseURL}/messages`, {
       method: "POST",
