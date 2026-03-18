@@ -31,11 +31,18 @@ export async function POST(req: NextRequest) {
     apiKey,
     baseURL,
     fetch: async (url, init) => {
-      console.log("[chat] request body:", init?.body?.toString?.()?.slice(0, 500));
+      if (init?.body) {
+        const body = JSON.parse(init.body.toString());
+        // Fix: some proxies don't support system as array, convert to string
+        if (Array.isArray(body.system)) {
+          body.system = body.system.map((s: any) => s.text ?? "").join("\n");
+          init = { ...init, body: JSON.stringify(body) };
+        }
+      }
       return fetch(url, init);
     },
   });
-  console.log("[chat] config:", { baseURL, model, apiKey });
+  console.log("[chat] config:", { baseURL, model });
   const cookie = req.headers.get("cookie") || "";
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:8001";
 
