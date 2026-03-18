@@ -18,6 +18,7 @@ const ALLOWED_TYPES: Record<string, string> = {
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",
   "text/plain": "txt", "application/json": "json", "text/html": "html",
   "text/xml": "xml", "application/xml": "xml",
+  "message/rfc822": "eml", "application/octet-stream": "eml",
 };
 
 async function saveFile(buf: Buffer, fileName: string, mimeType: string): Promise<string> {

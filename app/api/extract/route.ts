@@ -44,7 +44,42 @@ async function extractDocx(buf: Buffer): Promise<string> {
   return result.value;
 }
 
-export async function POST(req: NextRequest) {
+async function extractEml(buf: Buffer): Promise<string> {
+  const { simpleParser } = await import("mailparser");
+  const parsed = await simpleParser(buf);
+
+  const parts: string[] = [];
+
+  // Email headers
+  parts.push(`Subject: ${parsed.subject ?? ""}`);
+  parts.push(`From: ${parsed.from?.text ?? ""}`);
+  parts.push(`To: ${parsed.to?.text ?? ""}`);
+  parts.push(`Date: ${parsed.date?.toISOString() ?? ""}`);
+  parts.push("");
+
+  // Email body
+  if (parsed.text) parts.push(parsed.text);
+
+  // Extract PDF attachments
+  for (const att of parsed.attachments ?? []) {
+    if (att.contentType === "application/pdf" || att.filename?.toLowerCase().endsWith(".pdf")) {
+      parts.push(`\n--- Attachment: ${att.filename} ---`);
+      try {
+        const pdfText = await extractPdf(att.content as Buffer);
+        parts.push(pdfText);
+      } catch {
+        parts.push("[PDF extraction failed]");
+      }
+    } else if (att.contentType?.startsWith("text/")) {
+      parts.push(`\n--- Attachment: ${att.filename} ---`);
+      parts.push(att.content.toString("utf-8"));
+    }
+  }
+
+  return parts.join("\n");
+}
+
+
   try {
     const buf = Buffer.from(await req.arrayBuffer());
     const ct = req.headers.get("content-type") || "";
@@ -69,6 +104,8 @@ export async function POST(req: NextRequest) {
         imageMime: mimeType,
         mimeType,
       });
+    } else if (mimeType === "message/rfc822" || filename.endsWith(".eml")) {
+      text = await extractEml(buf);
     } else {
       text = buf.toString("utf-8");
     }
