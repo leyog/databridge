@@ -19,14 +19,16 @@ async function getAiConfigByOrgId(orgId: string | null): Promise<AiConfig> {
 }
 
 async function extractPdf(buf: Buffer, aiConfig: AiConfig): Promise<string> {
+  const { execFile } = await import("child_process");
+  const { writeFile, unlink, readdir } = await import("fs/promises");
+  const { tmpdir } = await import("os");
+  const { join } = await import("path");
+  const { randomBytes } = await import("crypto");
+
   // Try pdftotext first
   try {
-    const { execFile } = await import("child_process");
-    const { writeFile, unlink } = await import("fs/promises");
-    const { tmpdir } = await import("os");
-    const { join } = await import("path");
-    const { randomBytes } = await import("crypto");
-    const tmp = join(tmpdir(), `pdf_${randomBytes(6).toString("hex")}.pdf`);
+    const tmpId = randomBytes(6).toString("hex");
+    const tmp = join(tmpdir(), `pdf_${tmpId}.pdf`);
     await writeFile(tmp, buf);
     const text = await new Promise<string>((resolve, reject) => {
       execFile("pdftotext", [tmp, "-"], { maxBuffer: 10 * 1024 * 1024 }, async (err, stdout) => {
@@ -38,34 +40,74 @@ async function extractPdf(buf: Buffer, aiConfig: AiConfig): Promise<string> {
     if (text.trim()) return text;
     throw new Error("empty");
   } catch {
-    // Fallback: call AI API with PDF as base64
+    // pdftotext failed or empty — convert to images via pdftoppm then use vision API
     const apiKey = aiConfig?.apiKey || "";
     if (!apiKey) throw new Error("请先在设置页面配置 AI Provider（API Key）后再上传文件。");
     const provider = aiConfig?.provider || "anthropic";
     const defaultBaseUrl = provider === "openai" ? "https://api.openai.com/v1" : "https://api.anthropic.com";
     const baseURL = (aiConfig?.baseUrl || defaultBaseUrl).replace(/\/$/, "");
     const model = aiConfig?.model || (provider === "openai" ? "gpt-4o" : "claude-sonnet-4-6");
-    const base64 = buf.toString("base64");
-    const res = await fetch(`${baseURL}/messages`, {
+
+    const tmpId = randomBytes(6).toString("hex");
+    const tmpPdf = join(tmpdir(), `pdf_${tmpId}.pdf`);
+    const imgPrefix = join(tmpdir(), `pdf_${tmpId}_page`);
+    await writeFile(tmpPdf, buf);
+
+    const imgPaths: string[] = await new Promise((resolve, reject) => {
+      execFile("pdftoppm", ["-r", "150", "-png", tmpPdf, imgPrefix], async (err) => {
+        await unlink(tmpPdf).catch(() => {});
+        if (err) { reject(err); return; }
+        readdir(tmpdir()).then(files => {
+          const pages = files
+            .filter(f => f.startsWith(`pdf_${tmpId}_page`) && f.endsWith(".png"))
+            .sort()
+            .map(f => join(tmpdir(), f));
+          resolve(pages);
+        }).catch(reject);
+      });
+    });
+
+    console.log("[extractPdf] converted PDF to", imgPaths.length, "page images");
+    if (imgPaths.length === 0) throw new Error("PDF to image conversion failed");
+
+    // Use first 3 pages max
+    const pages = imgPaths.slice(0, 3);
+    const imageContents = pages.map(p => ({
+      type: "image_url",
+      image_url: { url: `data:image/png;base64,${fs.readFileSync(p).toString("base64")}` },
+    }));
+
+    // Cleanup
+    for (const p of imgPaths) unlink(p).catch(() => {});
+
+    // Call vision API (OpenAI-compatible format)
+    const res = await fetch(`${baseURL}/chat/completions`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
       body: JSON.stringify({
         model,
         max_tokens: 4096,
-        messages: [{ role: "user", content: [
-          { type: "image", source: { type: "base64", media_type: "application/pdf", data: base64 } },
-          { type: "text", text: "Extract all text content from this PDF. Return only the raw text, no formatting or commentary." }
-        ]}]
+        messages: [{
+          role: "user",
+          content: [
+            ...imageContents,
+            { type: "text", text: "Extract all text content from these PDF page images. Return only the raw text, no formatting or commentary." }
+          ]
+        }]
       })
     });
+
+    console.log("[extractPdf] vision API status:", res.status, "url:", `${baseURL}/chat/completions`);
     if (!res.ok) {
       const e = await res.text();
-      console.error("[extractPdf] API error:", res.status, e);
-      throw new Error(`API error: ${res.status} ${e}`);
+      console.error("[extractPdf] vision API error:", res.status, e);
+      throw new Error(`API error: ${res.status}`);
     }
     const json = await res.json();
-    console.log("[extractPdf] API response content types:", json.content?.map((c: any) => c.type));
-    return json.content?.[0]?.text || "";
+    // Support both OpenAI (choices) and Anthropic (content) response formats
+    const text = json.choices?.[0]?.message?.content ?? json.content?.[0]?.text ?? "";
+    console.log("[extractPdf] extracted text length:", text.length);
+    return text;
   }
 }
 
@@ -101,14 +143,6 @@ async function extractEml(buf: Buffer, aiConfig: AiConfig): Promise<string> {
     if (att.contentType === "application/pdf" || att.filename?.toLowerCase().endsWith(".pdf")) {
       parts.push(`\n--- Attachment: ${att.filename} ---`);
       try {
-        // Save to tmp and log path for debugging
-        const { writeFile } = await import("fs/promises");
-        const { tmpdir } = await import("os");
-        const { join } = await import("path");
-        const { randomBytes } = await import("crypto");
-        const tmpPath = join(tmpdir(), `eml_att_${randomBytes(6).toString("hex")}_${att.filename}`);
-        await writeFile(tmpPath, att.content as Buffer);
-        console.log("[extractEml] PDF attachment saved to:", tmpPath, "size:", (att.content as Buffer).length);
         const pdfText = await extractPdf(att.content as Buffer, aiConfig);
         parts.push(pdfText);
       } catch (e) {
