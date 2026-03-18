@@ -7,10 +7,20 @@ export const maxDuration = 60;
 
 async function getAiConfig(req: NextRequest) {
   const session = await auth();
-  if (!session?.user?.id) return null;
+  console.log("[getAiConfig] session:", JSON.stringify({ userId: session?.user?.id, email: session?.user?.email }));
+  if (!session?.user?.id) {
+    console.log("[getAiConfig] no session user id, returning null");
+    return null;
+  }
   const member = await prisma.orgMember.findFirst({ where: { userId: session.user.id } });
-  if (!member) return null;
-  return prisma.aiConfig.findUnique({ where: { orgId: member.orgId } });
+  console.log("[getAiConfig] orgMember query userId:", session.user.id, "result:", JSON.stringify(member));
+  if (!member) {
+    console.log("[getAiConfig] no org member found, returning null");
+    return null;
+  }
+  const config = await prisma.aiConfig.findUnique({ where: { orgId: member.orgId } });
+  console.log("[getAiConfig] aiConfig query orgId:", member.orgId, "result:", JSON.stringify({ ...config, apiKey: config?.apiKey ? `${config.apiKey.slice(0,8)}...` : null }));
+  return config;
 }
 
 async function extractPdf(buf: Buffer, aiConfig: { apiKey?: string | null; baseUrl?: string | null; model?: string | null } | null): Promise<string> {
