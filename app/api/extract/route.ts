@@ -74,8 +74,9 @@ async function extractEml(buf: Buffer): Promise<string> {
       try {
         const pdfText = await extractPdf(att.content as Buffer);
         parts.push(pdfText);
-      } catch {
+      } catch (e) {
         parts.push("[PDF extraction failed]");
+        console.error("[eml] PDF extraction error:", e instanceof Error ? e.message : String(e));
       }
     } else if (att.contentType?.startsWith("text/")) {
       parts.push(`\n--- Attachment: ${att.filename} ---`);
