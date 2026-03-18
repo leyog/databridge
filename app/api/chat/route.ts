@@ -37,13 +37,55 @@ export async function POST(req: NextRequest) {
           body.system = body.system.map((s: any) => s.text ?? "").join("\n");
         }
         body.stream = true;
-        // Fix empty input_schema for tools
+        // Fix empty input_schema for tools - inject real schemas
+        const toolSchemas: Record<string, any> = {
+          list_jobs: {
+            type: "object",
+            properties: {
+              status: { type: "string", enum: ["PENDING","PROCESSING","PARSED","REVIEWING","APPROVED","REJECTED","SENT","FAILED"] },
+              limit: { type: "number", minimum: 1, maximum: 50, default: 10 },
+            },
+          },
+          list_templates: { type: "object", properties: {} },
+          create_template: {
+            type: "object",
+            required: ["name", "prompt", "outputSchema"],
+            properties: {
+              name: { type: "string" },
+              description: { type: "string" },
+              prompt: { type: "string" },
+              outputSchema: { type: "object" },
+            },
+          },
+          get_analytics: {
+            type: "object",
+            properties: { days: { type: "number", minimum: 1, maximum: 90, default: 30 } },
+          },
+          list_webhook_endpoints: { type: "object", properties: {} },
+          create_webhook_endpoint: {
+            type: "object",
+            required: ["name", "url"],
+            properties: {
+              name: { type: "string" },
+              url: { type: "string" },
+              format: { type: "string", enum: ["raw", "zapier"], default: "raw" },
+            },
+          },
+          approve_job: {
+            type: "object",
+            required: ["jobId"],
+            properties: { jobId: { type: "string" } },
+          },
+          bulk_approve: {
+            type: "object",
+            required: ["jobIds"],
+            properties: { jobIds: { type: "array", items: { type: "string" } } },
+          },
+        };
         if (Array.isArray(body.tools)) {
           body.tools = body.tools.map((t: any) => ({
             ...t,
-            input_schema: (t.input_schema && Object.keys(t.input_schema).length > 1)
-              ? t.input_schema
-              : { type: "object", properties: {} },
+            input_schema: toolSchemas[t.name] ?? { type: "object", properties: {} },
           }));
         }
         init = { ...init, body: JSON.stringify(body) };
