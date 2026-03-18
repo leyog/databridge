@@ -20,17 +20,12 @@ async function extractPdf(buf: Buffer): Promise<string> {
     if (text.trim()) return text;
     throw new Error("empty");
   } catch {
-    // Fallback: pdfjs-dist (pure JS, works on Vercel)
-    const pdfjsLib = await import("pdfjs-dist/legacy/build/pdf.mjs" as any);
-    const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(buf) });
-    const pdf = await loadingTask.promise;
-    const pages: string[] = [];
-    for (let i = 1; i <= pdf.numPages; i++) {
-      const page = await pdf.getPage(i);
-      const content = await page.getTextContent();
-      pages.push(content.items.map((item: any) => item.str).join(" "));
-    }
-    return pages.join("\n");
+    // Fallback: pdf-parse (pure JS, works on Vercel)
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { PDFParse } = require("pdf-parse");
+    const parser = new PDFParse();
+    const result = await parser.pdf(buf);
+    return result.text || "";
   }
 }
 
