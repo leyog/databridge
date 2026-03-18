@@ -25,7 +25,8 @@ async function saveFile(buf: Buffer, fileName: string, mimeType: string): Promis
   // Use Vercel Blob if token is available
   if (process.env.BLOB_READ_WRITE_TOKEN) {
     const { put } = await import("@vercel/blob");
-    const blob = await put(`uploads/${fileName}`, buf, { access: "public", contentType: mimeType });
+    const { put: putBlob } = await import("@vercel/blob");
+    const blob = await putBlob(`uploads/${fileName}`, buf, { access: "public", contentType: mimeType });
     return blob.url;
   }
   // Local fallback
