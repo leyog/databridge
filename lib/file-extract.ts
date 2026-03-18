@@ -40,47 +40,16 @@ async function extractPdf(buf: Buffer, aiConfig: AiConfig): Promise<string> {
     if (text.trim()) return text;
     throw new Error("empty");
   } catch {
-    // pdftotext failed or empty — convert to images via pdftoppm then use vision API
+    // pdftotext failed or empty — send PDF as base64 to vision API
     const apiKey = aiConfig?.apiKey || "";
     if (!apiKey) throw new Error("请先在设置页面配置 AI Provider（API Key）后再上传文件。");
     const provider = aiConfig?.provider || "anthropic";
     const defaultBaseUrl = provider === "openai" ? "https://api.openai.com/v1" : "https://api.anthropic.com";
     const baseURL = (aiConfig?.baseUrl || defaultBaseUrl).replace(/\/$/, "");
     const model = aiConfig?.model || (provider === "openai" ? "gpt-4o" : "claude-sonnet-4-6");
+    const base64 = buf.toString("base64");
 
-    const tmpId = randomBytes(6).toString("hex");
-    const tmpPdf = join(tmpdir(), `pdf_${tmpId}.pdf`);
-    const imgPrefix = join(tmpdir(), `pdf_${tmpId}_page`);
-    await writeFile(tmpPdf, buf);
-
-    const imgPaths: string[] = await new Promise((resolve, reject) => {
-      execFile("pdftoppm", ["-r", "150", "-png", tmpPdf, imgPrefix], async (err) => {
-        await unlink(tmpPdf).catch(() => {});
-        if (err) { reject(err); return; }
-        readdir(tmpdir()).then(files => {
-          const pages = files
-            .filter(f => f.startsWith(`pdf_${tmpId}_page`) && f.endsWith(".png"))
-            .sort()
-            .map(f => join(tmpdir(), f));
-          resolve(pages);
-        }).catch(reject);
-      });
-    });
-
-    console.log("[extractPdf] converted PDF to", imgPaths.length, "page images");
-    if (imgPaths.length === 0) throw new Error("PDF to image conversion failed");
-
-    // Use first 3 pages max
-    const pages = imgPaths.slice(0, 3);
-    const imageContents = pages.map(p => ({
-      type: "image_url",
-      image_url: { url: `data:image/png;base64,${fs.readFileSync(p).toString("base64")}` },
-    }));
-
-    // Cleanup
-    for (const p of imgPaths) unlink(p).catch(() => {});
-
-    // Call vision API (OpenAI-compatible format)
+    // Try OpenAI-compatible vision with PDF as image_url data URI
     const res = await fetch(`${baseURL}/chat/completions`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
@@ -90,8 +59,8 @@ async function extractPdf(buf: Buffer, aiConfig: AiConfig): Promise<string> {
         messages: [{
           role: "user",
           content: [
-            ...imageContents,
-            { type: "text", text: "Extract all text content from these PDF page images. Return only the raw text, no formatting or commentary." }
+            { type: "image_url", image_url: { url: `data:application/pdf;base64,${base64}` } },
+            { type: "text", text: "Extract all text content from this PDF. Return only the raw text, no formatting or commentary." }
           ]
         }]
       })
@@ -101,10 +70,9 @@ async function extractPdf(buf: Buffer, aiConfig: AiConfig): Promise<string> {
     if (!res.ok) {
       const e = await res.text();
       console.error("[extractPdf] vision API error:", res.status, e);
-      throw new Error(`API error: ${res.status}`);
+      throw new Error(`API error: ${res.status} - ${e}`);
     }
     const json = await res.json();
-    // Support both OpenAI (choices) and Anthropic (content) response formats
     const text = json.choices?.[0]?.message?.content ?? json.content?.[0]?.text ?? "";
     console.log("[extractPdf] extracted text length:", text.length);
     return text;
