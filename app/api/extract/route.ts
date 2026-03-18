@@ -1,4 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
+import { auth } from "@/auth";
+
+async function getAiConfig() {
+  try {
+    const session = await auth();
+    const userId = session?.user?.id;
+    if (!userId) return null;
+    const member = await prisma.orgMember.findFirst({ where: { userId }, select: { orgId: true } });
+    if (!member) return null;
+    return prisma.aiConfig.findUnique({ where: { orgId: member.orgId } });
+  } catch {
+    return null;
+  }
+}
 
 async function extractPdf(buf: Buffer): Promise<string> {
   // Try pdftotext first (local/server)
@@ -20,25 +35,34 @@ async function extractPdf(buf: Buffer): Promise<string> {
     if (text.trim()) return text;
     throw new Error("empty");
   } catch {
-    // Fallback: use Anthropic vision API to extract text from PDF
-    const { createAnthropic } = await import("@ai-sdk/anthropic");
-    const { generateText } = await import("ai");
-    const apiKey = process.env.ANTHROPIC_API_KEY;
-    const baseURL = process.env.ANTHROPIC_BASE_URL || "https://api.anthropic.com";
-    const model = process.env.ANTHROPIC_MODEL || "claude-sonnet-4-6";
-    const anthropic = createAnthropic({ apiKey, baseURL });
+    // Fallback: call Anthropic API directly with PDF as base64
+    const aiConfig = await getAiConfig();
+    const apiKey = aiConfig?.apiKey || process.env.ANTHROPIC_API_KEY || "";
+    const baseURL = (aiConfig?.baseUrl || process.env.ANTHROPIC_BASE_URL || "https://api.anthropic.com/v1").replace(/\/$/, "");
+    const model = aiConfig?.model || process.env.ANTHROPIC_MODEL || "claude-sonnet-4-6";
     const base64 = buf.toString("base64");
-    const { text } = await generateText({
-      model: anthropic(model),
-      messages: [{
-        role: "user",
-        content: [
-          { type: "file", data: base64, mimeType: "application/pdf" },
-          { type: "text", text: "Extract all text content from this PDF. Return only the raw text, no formatting or commentary." }
-        ]
-      }]
+    const res = await fetch(`${baseURL}/messages`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model,
+        max_tokens: 4096,
+        messages: [{
+          role: "user",
+          content: [
+            { type: "document", source: { type: "base64", media_type: "application/pdf", data: base64 } },
+            { type: "text", text: "Extract all text content from this PDF. Return only the raw text, no formatting or commentary." }
+          ]
+        }]
+      })
     });
-    return text || "";
+    if (!res.ok) throw new Error(`API error: ${res.status}`);
+    const json = await res.json();
+    return json.content?.[0]?.text || "";
   }
 }
 
