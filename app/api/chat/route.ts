@@ -1,161 +1,126 @@
-import { NextRequest } from "next/server";
-import { createAnthropic } from "@ai-sdk/anthropic";
-import { createOpenAI } from "@ai-sdk/openai";
-import { streamText, tool } from "ai";
-import { z } from "zod";
+import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-async function getOrgId(userId: string) {
-  const m = await prisma.orgMember.findFirst({ where: { userId } });
-  return m?.orgId ?? null;
-}
-
-function buildModel(apiKey: string, baseURL: string, modelName: string) {
-  // If baseURL looks like an OpenAI-compatible endpoint (not api.anthropic.com), use openai SDK
-  const isAnthropic = baseURL.includes("api.anthropic.com");
-  if (isAnthropic) {
-    const anthropic = createAnthropic({ apiKey, baseURL });
-    return anthropic(modelName);
-  }
-  // OpenAI-compatible
-  const openai = createOpenAI({ apiKey, baseURL, compatibility: "compatible" });
-  return openai(modelName);
-}
-
 export async function POST(req: NextRequest) {
   const session = await auth();
-  if (!session?.user?.id) return new Response("Unauthorized", { status: 401 });
+  if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const orgId = await getOrgId(session.user.id);
-  if (!orgId) return new Response("No org", { status: 403 });
+  const member = await prisma.orgMember.findFirst({ where: { userId: session.user.id } });
+  if (!member) return NextResponse.json({ error: "No org" }, { status: 403 });
+
+  const aiConfig = await prisma.aiConfig.findUnique({ where: { orgId: member.orgId } });
+  const apiKey = aiConfig?.apiKey;
+  if (!apiKey) return NextResponse.json({ error: "请先在设置页面配置 AI Provider（API Key）" }, { status: 400 });
+
+  const baseURL = (aiConfig?.baseUrl || "https://api.anthropic.com").replace(/\/$/, "");
+  const model = aiConfig?.model || "claude-sonnet-4-6";
+  const isNativeAnthropic = baseURL.includes("api.anthropic.com");
 
   const { messages } = await req.json();
 
-  const aiConfig = await prisma.aiConfig.findUnique({ where: { orgId } });
-  const apiKey = aiConfig?.apiKey || process.env.ANTHROPIC_API_KEY!;
-  const baseURL = (aiConfig?.baseUrl || process.env.ANTHROPIC_BASE_URL || "https://api.anthropic.com").replace(/\/$/, "");
-  const model = aiConfig?.model || process.env.ANTHROPIC_MODEL || "claude-sonnet-4-20250514";
+  // Build OpenAI-compatible messages
+  const systemMsg = {
+    role: "system",
+    content: `You are DataBridge Assistant, an AI helper embedded in the DataBridge document processing platform.
+DataBridge helps users extract structured data from documents (PDFs, emails, Excel, Word files) using AI-powered templates.
 
-  console.log("[chat] config:", { baseURL, model });
-  const cookie = req.headers.get("cookie") || "";
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:8001";
+You can help users with:
+- Understanding how to create and use templates for document parsing
+- Explaining job statuses and workflows (PENDING → PROCESSING → PARSED → REVIEWING → APPROVED)
+- Troubleshooting upload or parsing issues
+- Guiding users through settings (AI Config, API Keys, Email Inboxes, Members)
+- Answering questions about the platform features
 
-  const apiFetch = (path: string, init?: RequestInit) =>
-    fetch(`${baseUrl}${path}`, {
-      ...init,
-      headers: { "Content-Type": "application/json", Cookie: cookie, ...(init?.headers as Record<string, string>) },
-    });
+Keep responses concise and practical. Respond in the same language the user uses.`,
+  };
 
-  try {
-    const result = await streamText({
-    model: buildModel(apiKey, baseURL, model),
-    system: `You are DataBridge Assistant, an AI helper embedded in the DataBridge document processing platform.
-Help users manage document processing workflows through natural language.
-You can: list/create templates, view jobs, manage webhook endpoints, show analytics.
-Respond in the same language the user uses. Be concise and action-oriented.`,
-    messages,
-    maxSteps: 5,
-    tools: {
-      list_jobs: tool({
-        description: "List recent jobs with optional status filter",
-        parameters: z.object({
-          status: z.enum(["PENDING","PROCESSING","PARSED","REVIEWING","APPROVED","REJECTED","SENT","FAILED"]).optional(),
-          limit: z.number().min(1).max(50).default(10),
-        }),
-        execute: async ({ status, limit }) => {
-          const params = new URLSearchParams({ limit: String(limit) });
-          if (status) params.set("status", status);
-          const res = await apiFetch(`/api/jobs?${params}`);
-          const data = await res.json();
-          const jobs = (data.jobs ?? data) as any[];
-          return { count: jobs.length, jobs: jobs.map((j: any) => ({ id: j.id, fileName: j.fileName, status: j.status, template: j.template?.name })) };
-        },
-      }),
-      list_templates: tool({
-        description: "List all templates",
-        parameters: z.object({}),
-        execute: async () => {
-          const res = await apiFetch("/api/templates");
-          const templates = await res.json() as any[];
-          return { count: templates.length, templates: templates.map((t: any) => ({ id: t.id, name: t.name, description: t.description })) };
-        },
-      }),
-      create_template: tool({
-        description: "Create a new document template",
-        parameters: z.object({
-          name: z.string(),
-          description: z.string().optional(),
-          prompt: z.string(),
-          outputSchema: z.record(z.string(), z.any()),
-        }),
-        execute: async (args) => {
-          const res = await apiFetch("/api/templates", { method: "POST", body: JSON.stringify(args) });
-          const data = await res.json() as any;
-          return res.ok ? { success: true, id: data.id, name: data.name } : { success: false, error: data.error };
-        },
-      }),
-      get_analytics: tool({
-        description: "Get analytics data",
-        parameters: z.object({ days: z.number().min(1).max(90).default(30) }),
-        execute: async ({ days }) => {
-          const res = await apiFetch(`/api/analytics?days=${days}`);
-          return res.json();
-        },
-      }),
-      list_webhook_endpoints: tool({
-        description: "List all webhook endpoints",
-        parameters: z.object({}),
-        execute: async () => {
-          const res = await apiFetch("/api/webhook-endpoints");
-          return res.json();
-        },
-      }),
-      create_webhook_endpoint: tool({
-        description: "Create a new webhook endpoint",
-        parameters: z.object({
-          name: z.string(),
-          url: z.string().url(),
-          format: z.enum(["raw", "zapier"]).default("raw"),
-        }),
-        execute: async (args) => {
-          const res = await apiFetch("/api/webhook-endpoints", { method: "POST", body: JSON.stringify(args) });
-          const data = await res.json() as any;
-          return res.ok ? { success: true, id: data.id, name: data.name } : { success: false, error: data.error };
-        },
-      }),
-      approve_job: tool({
-        description: "Approve a job by ID",
-        parameters: z.object({ jobId: z.string() }),
-        execute: async ({ jobId }) => {
-          const res = await apiFetch(`/api/jobs/${jobId}`, { method: "PATCH", body: JSON.stringify({ action: "approve" }) });
-          const data = await res.json() as any;
-          return res.ok ? { success: true, status: data.status } : { success: false, error: data.error };
-        },
-      }),
-      bulk_approve: tool({
-        description: "Bulk approve multiple jobs",
-        parameters: z.object({ jobIds: z.array(z.string()) }),
-        execute: async ({ jobIds }) => {
-          const res = await apiFetch("/api/jobs/bulk", { method: "POST", body: JSON.stringify({ action: "approve", jobIds }) });
-          const data = await res.json() as any;
-          return res.ok ? { success: true, count: data.results?.length } : { success: false, error: data.error };
-        },
-      }),
-    },
+  const body: any = {
+    model,
+    stream: true,
+    messages: [systemMsg, ...messages],
+    max_tokens: 2048,
+  };
+
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+
+  let endpoint: string;
+  if (isNativeAnthropic) {
+    endpoint = `${baseURL}/v1/messages`;
+    headers["x-api-key"] = apiKey;
+    headers["anthropic-version"] = "2023-06-01";
+    // Convert to Anthropic format
+    const systemContent = messages.find((m: any) => m.role === "system")?.content || systemMsg.content;
+    body.system = systemContent;
+    body.messages = messages.filter((m: any) => m.role !== "system");
+    delete body.messages; // reassign below
+    body.messages = messages.filter((m: any) => m.role !== "system");
+  } else {
+    endpoint = `${baseURL}/chat/completions`;
+    headers["Authorization"] = `Bearer ${apiKey}`;
+  }
+
+  console.log("[chat] endpoint:", endpoint, "model:", model);
+
+  const upstream = await fetch(endpoint, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(body),
   });
 
-    return result.toDataStreamResponse({
-      getErrorMessage: (error) => {
-        console.error("[chat] stream error:", JSON.stringify(error));
-        return error instanceof Error ? error.message : String(error);
-      },
-    });
-  } catch (e: any) {
-    console.error("[chat] caught error:", e?.message, e?.status, JSON.stringify(e?.responseBody ?? e));
-    return new Response(JSON.stringify({ error: e?.message }), { status: 500, headers: { "Content-Type": "application/json" } });
+  if (!upstream.ok) {
+    const err = await upstream.text();
+    console.error("[chat] upstream error:", upstream.status, err);
+    return NextResponse.json({ error: `API error: ${upstream.status}` }, { status: 500 });
   }
+
+  // Stream response back to client as text/event-stream
+  const { readable, writable } = new TransformStream();
+  const writer = writable.getWriter();
+  const encoder = new TextEncoder();
+  const decoder = new TextDecoder();
+
+  (async () => {
+    const reader = upstream.body!.getReader();
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value, { stream: true });
+        // Parse SSE lines and extract text delta
+        for (const line of chunk.split("\n")) {
+          if (!line.startsWith("data: ")) continue;
+          const data = line.slice(6).trim();
+          if (data === "[DONE]") continue;
+          try {
+            const json = JSON.parse(data);
+            // OpenAI format
+            const delta = json.choices?.[0]?.delta?.content;
+            // Anthropic format
+            const anthropicDelta = json.type === "content_block_delta" ? json.delta?.text : null;
+            const text = delta ?? anthropicDelta;
+            if (text) {
+              // Vercel AI SDK data stream format
+              await writer.write(encoder.encode(`0:${JSON.stringify(text)}\n`));
+            }
+          } catch {}
+        }
+      }
+    } finally {
+      await writer.write(encoder.encode(`d:{"finishReason":"stop"}\n`));
+      await writer.close();
+    }
+  })();
+
+  return new Response(readable, {
+    headers: {
+      "Content-Type": "text/plain; charset=utf-8",
+      "X-Vercel-AI-Data-Stream": "v1",
+    },
+  });
 }
