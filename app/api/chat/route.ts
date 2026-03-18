@@ -5,6 +5,9 @@ import { z } from "zod";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 
+export const runtime = "nodejs";
+export const maxDuration = 60;
+
 async function getOrgId(userId: string) {
   const m = await prisma.orgMember.findFirst({ where: { userId } });
   return m?.orgId ?? null;
