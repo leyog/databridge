@@ -92,9 +92,18 @@ async function extractEml(buf: Buffer, aiConfig: AiConfig): Promise<string> {
   parts.push("");
   if (parsed.text) parts.push(parsed.text);
   for (const att of parsed.attachments ?? []) {
+    console.log("[extractEml] attachment:", att.filename, "contentType:", att.contentType, "size:", (att.content as Buffer)?.length);
     if (att.contentType === "application/pdf" || att.filename?.toLowerCase().endsWith(".pdf")) {
       parts.push(`\n--- Attachment: ${att.filename} ---`);
       try {
+        // Save to tmp and log path for debugging
+        const { writeFile } = await import("fs/promises");
+        const { tmpdir } = await import("os");
+        const { join } = await import("path");
+        const { randomBytes } = await import("crypto");
+        const tmpPath = join(tmpdir(), `eml_att_${randomBytes(6).toString("hex")}_${att.filename}`);
+        await writeFile(tmpPath, att.content as Buffer);
+        console.log("[extractEml] PDF attachment saved to:", tmpPath, "size:", (att.content as Buffer).length);
         const pdfText = await extractPdf(att.content as Buffer, aiConfig);
         parts.push(pdfText);
       } catch (e) {
