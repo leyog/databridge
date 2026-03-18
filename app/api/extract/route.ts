@@ -20,12 +20,25 @@ async function extractPdf(buf: Buffer): Promise<string> {
     if (text.trim()) return text;
     throw new Error("empty");
   } catch {
-    // Fallback: pdf-parse (pure JS, works on Vercel)
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { PDFParse } = require("pdf-parse");
-    const parser = new PDFParse();
-    const result = await parser.pdf(buf);
-    return result.text || "";
+    // Fallback: use Anthropic vision API to extract text from PDF
+    const { createAnthropic } = await import("@ai-sdk/anthropic");
+    const { generateText } = await import("ai");
+    const apiKey = process.env.ANTHROPIC_API_KEY;
+    const baseURL = process.env.ANTHROPIC_BASE_URL || "https://api.anthropic.com";
+    const model = process.env.ANTHROPIC_MODEL || "claude-sonnet-4-6";
+    const anthropic = createAnthropic({ apiKey, baseURL });
+    const base64 = buf.toString("base64");
+    const { text } = await generateText({
+      model: anthropic(model),
+      messages: [{
+        role: "user",
+        content: [
+          { type: "file", data: base64, mimeType: "application/pdf" },
+          { type: "text", text: "Extract all text content from this PDF. Return only the raw text, no formatting or commentary." }
+        ]
+      }]
+    });
+    return text || "";
   }
 }
 
