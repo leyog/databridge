@@ -60,7 +60,12 @@ async function extractPdf(buf: Buffer): Promise<string> {
         }]
       })
     });
-    if (!res.ok) throw new Error(`API error: ${res.status}`);
+    console.log("[pdf] request url:", `${baseURL}/messages`, "status:", res.status);
+    if (!res.ok) {
+      const errText = await res.text();
+      console.error("[pdf] api error:", errText);
+      throw new Error(`API error: ${res.status}`);
+    }
     const json = await res.json();
     return json.content?.[0]?.text || "";
   }
