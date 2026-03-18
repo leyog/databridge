@@ -27,7 +27,14 @@ export async function POST(req: NextRequest) {
   const baseURL = aiConfig?.baseUrl || process.env.ANTHROPIC_BASE_URL || "https://api.anthropic.com";
   const model = aiConfig?.model || process.env.ANTHROPIC_MODEL || "claude-sonnet-4-20250514";
 
-  const anthropic = createAnthropic({ apiKey, baseURL });
+  const anthropic = createAnthropic({
+    apiKey,
+    baseURL,
+    fetch: async (url, init) => {
+      console.log("[chat] request body:", init?.body?.toString?.()?.slice(0, 500));
+      return fetch(url, init);
+    },
+  });
   console.log("[chat] config:", { baseURL, model, apiKey });
   const cookie = req.headers.get("cookie") || "";
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:8001";
