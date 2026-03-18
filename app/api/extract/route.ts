@@ -1,5 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
-async function extractPdf(buf: Buffer): Promise<string> {
+import { auth } from "@/auth";
+import { prisma } from "@/lib/prisma";
+
+export const runtime = "nodejs";
+export const maxDuration = 60;
+
+async function getAiConfig(req: NextRequest) {
+  const session = await auth();
+  if (!session?.user?.id) return null;
+  const member = await prisma.orgMember.findFirst({ where: { userId: session.user.id } });
+  if (!member) return null;
+  return prisma.aiConfig.findUnique({ where: { orgId: member.orgId } });
+}
+
+async function extractPdf(buf: Buffer, aiConfig: { apiKey?: string | null; baseUrl?: string | null; model?: string | null } | null): Promise<string> {
   // Try pdftotext first (local/server)
   try {
     const { execFile } = await import("child_process");
@@ -20,9 +34,10 @@ async function extractPdf(buf: Buffer): Promise<string> {
     throw new Error("empty");
   } catch {
     // Fallback: call Anthropic API directly with PDF as base64
-    const apiKey = process.env.ANTHROPIC_API_KEY || "";
-    const baseURL = (process.env.ANTHROPIC_BASE_URL || "https://api.anthropic.com/v1").replace(/\/$/, "");
-    const model = process.env.ANTHROPIC_MODEL || "claude-sonnet-4-6";
+    const apiKey = aiConfig?.apiKey || "";
+    const baseURL = (aiConfig?.baseUrl || "").replace(/\/$/, "");
+    const model = aiConfig?.model || "claude-sonnet-4-6";
+    if (!apiKey || !baseURL) throw new Error("AI config not found, cannot extract PDF");
     const base64 = buf.toString("base64");
     const res = await fetch(`${baseURL}/messages`, {
       method: "POST",
@@ -71,7 +86,7 @@ async function extractDocx(buf: Buffer): Promise<string> {
   return result.value;
 }
 
-async function extractEml(buf: Buffer): Promise<string> {
+async function extractEml(buf: Buffer, aiConfig: { apiKey?: string | null; baseUrl?: string | null; model?: string | null } | null): Promise<string> {
   const { simpleParser } = await import("mailparser");
   const parsed = await simpleParser(buf);
 
@@ -92,7 +107,7 @@ async function extractEml(buf: Buffer): Promise<string> {
     if (att.contentType === "application/pdf" || att.filename?.toLowerCase().endsWith(".pdf")) {
       parts.push(`\n--- Attachment: ${att.filename} ---`);
       try {
-        const pdfText = await extractPdf(att.content as Buffer);
+        const pdfText = await extractPdf(att.content as Buffer, aiConfig);
         parts.push(pdfText);
       } catch (e) {
         parts.push("[PDF extraction failed]");
@@ -113,11 +128,12 @@ export async function POST(req: NextRequest) {
     const ct = req.headers.get("content-type") || "";
     const mimeType = ct.split(";")[0].trim();
     const filename = req.headers.get("x-filename") || "file";
+    const aiConfig = await getAiConfig(req);
 
     let text = "";
 
     if (mimeType === "application/pdf" || filename.endsWith(".pdf")) {
-      text = await extractPdf(buf);
+      text = await extractPdf(buf, aiConfig);
     } else if (
       mimeType.includes("spreadsheet") || mimeType.includes("excel") ||
       /\.(xlsx|xls|csv)$/i.test(filename)
@@ -133,7 +149,7 @@ export async function POST(req: NextRequest) {
         mimeType,
       });
     } else if (mimeType === "message/rfc822" || filename.endsWith(".eml")) {
-      text = await extractEml(buf);
+      text = await extractEml(buf, aiConfig);
     } else {
       text = buf.toString("utf-8");
     }
