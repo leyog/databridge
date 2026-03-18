@@ -9,6 +9,8 @@ export default function ChatWidget() {
 
   const { messages, input, handleInputChange, handleSubmit, isLoading, error } = useChat({
     api: "/api/chat",
+    onError: (err) => console.error("[chat] error:", err),
+    onFinish: (msg, opts) => console.log("[chat] finish:", msg.content, opts),
   });
 
   useEffect(() => {
