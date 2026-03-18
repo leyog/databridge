@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
       headers: { "Content-Type": "application/json", Cookie: cookie, ...(init?.headers as Record<string, string>) },
     });
 
-  const result = streamText({
+  const result = await streamText({
     model: anthropic(model),
     system: `You are DataBridge Assistant, an AI helper embedded in the DataBridge document processing platform.
 Help users manage document processing workflows through natural language.
