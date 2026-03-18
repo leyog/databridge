@@ -40,37 +40,46 @@ async function extractPdf(buf: Buffer, aiConfig: AiConfig): Promise<string> {
     if (text.trim()) return text;
     throw new Error("empty");
   } catch {
-    // pdftotext failed or empty — send PDF as base64 to vision API
+    // pdftotext failed or empty — render PDF pages via pdfjs-dist + canvas, then use vision API
     const apiKey = aiConfig?.apiKey || "";
     if (!apiKey) throw new Error("请先在设置页面配置 AI Provider（API Key）后再上传文件。");
     const provider = aiConfig?.provider || "anthropic";
     const defaultBaseUrl = provider === "openai" ? "https://api.openai.com/v1" : "https://api.anthropic.com";
     const baseURL = (aiConfig?.baseUrl || defaultBaseUrl).replace(/\/$/, "");
     const model = aiConfig?.model || (provider === "openai" ? "gpt-4o" : "claude-sonnet-4-6");
-    const base64 = buf.toString("base64");
 
-    // Try OpenAI-compatible vision with PDF as image_url data URI
+    // Render PDF pages to PNG via pdfjs-dist + canvas
+    const pdfjsLib = await import("pdfjs-dist/legacy/build/pdf.mjs" as any).catch(() => import("pdfjs-dist"));
+    const { createCanvas } = await import("canvas");
+
+    const pdfDoc = await pdfjsLib.getDocument({ data: new Uint8Array(buf) }).promise;
+    const numPages = Math.min(pdfDoc.numPages, 3);
+    console.log("[extractPdf] rendering", numPages, "pages via pdfjs-dist");
+
+    const imageContents: any[] = [];
+    for (let i = 1; i <= numPages; i++) {
+      const page = await pdfDoc.getPage(i);
+      const viewport = page.getViewport({ scale: 1.5 });
+      const canvas = createCanvas(viewport.width, viewport.height);
+      const ctx = canvas.getContext("2d");
+      await page.render({ canvasContext: ctx as any, viewport }).promise;
+      const pngBase64 = canvas.toBuffer("image/png").toString("base64");
+      imageContents.push({ type: "image_url", image_url: { url: `data:image/png;base64,${pngBase64}` } });
+    }
+
+    imageContents.push({ type: "text", text: "Extract all text content from these PDF page images. Return only the raw text, no formatting or commentary." });
+
     const res = await fetch(`${baseURL}/chat/completions`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
-      body: JSON.stringify({
-        model,
-        max_tokens: 4096,
-        messages: [{
-          role: "user",
-          content: [
-            { type: "image_url", image_url: { url: `data:application/pdf;base64,${base64}` } },
-            { type: "text", text: "Extract all text content from this PDF. Return only the raw text, no formatting or commentary." }
-          ]
-        }]
-      })
+      body: JSON.stringify({ model, max_tokens: 4096, messages: [{ role: "user", content: imageContents }] })
     });
 
-    console.log("[extractPdf] vision API status:", res.status, "url:", `${baseURL}/chat/completions`);
+    console.log("[extractPdf] vision API status:", res.status);
     if (!res.ok) {
       const e = await res.text();
       console.error("[extractPdf] vision API error:", res.status, e);
-      throw new Error(`API error: ${res.status} - ${e}`);
+      throw new Error(`API error: ${res.status}`);
     }
     const json = await res.json();
     const text = json.choices?.[0]?.message?.content ?? json.content?.[0]?.text ?? "";
