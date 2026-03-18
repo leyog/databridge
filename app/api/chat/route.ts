@@ -43,9 +43,6 @@ You can: list/create templates, view jobs, manage webhook endpoints, show analyt
 Respond in the same language the user uses. Be concise and action-oriented.`,
     messages,
     maxSteps: 5,
-    onError: (error) => {
-      console.error("[chat] streamText error:", JSON.stringify(error, null, 2));
-    },
     tools: {
       list_jobs: tool({
         description: "List recent jobs with optional status filter",
